@@ -110,3 +110,48 @@ export function currentContextTokens(transcriptPath) {
   }
   return 0;
 }
+
+// ---- Model tracking (for the Opus -> Sonnet router) ----
+export const EXPENSIVE_MODEL = /opus|fable|mythos/i;
+
+// Model of the main thread: the model that produced the last main-thread
+// assistant message (most accurate, follows /model switches), falling back to
+// the value cached from SessionStart / PostModelSwitch.
+export function mainModel(input) {
+  const cached = loadState(input.session_id).data.model || "";
+  const p = input.transcript_path;
+  if (!p || !fs.existsSync(p)) return cached;
+  try {
+    const st = fs.statSync(p);
+    const len = Math.min(st.size, 1_000_000);
+    const buf = Buffer.alloc(len);
+    const fd = fs.openSync(p, "r");
+    fs.readSync(fd, buf, 0, len, st.size - len);
+    fs.closeSync(fd);
+    const lines = buf.toString("utf8").split("\n");
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (!lines[i].includes('"model"')) continue;
+      try {
+        const o = JSON.parse(lines[i]);
+        if (!o.isSidechain && o?.message?.model) return o.message.model;
+      } catch {}
+    }
+  } catch {}
+  return cached;
+}
+
+export function rememberModel(sessionId, model) {
+  if (!model) return;
+  const state = loadState(sessionId);
+  state.data.model = typeof model === "string" ? model : model.id || model.display_name || "";
+  saveState(state);
+}
+
+// Router is on unless disabled by env or a per-project marker file.
+export function routerEnabled(cwd) {
+  if (/^(0|off|false)$/i.test(process.env.TOKEN_SAVER_ROUTER || "")) return false;
+  try {
+    if (fs.existsSync(path.join(cwd || process.cwd(), ".claude", "token-saver-router-off"))) return false;
+  } catch {}
+  return true;
+}

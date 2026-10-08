@@ -2,10 +2,12 @@
 // this text is sent on every turn of the session.
 import fs from "node:fs";
 import path from "node:path";
-import { readStdin, addContext } from "./lib.mjs";
+import { readStdin, addContext, rememberModel, routerEnabled, EXPENSIVE_MODEL } from "./lib.mjs";
 
 const input = readStdin();
 const cwd = input.cwd || process.cwd();
+rememberModel(input.session_id, input.model);
+const modelName = typeof input.model === "string" ? input.model : input.model?.id || input.model?.display_name || "";
 
 let rules = `Token budget is limited. Work economically:
 - Be terse. No preamble, no recap of what you did, no restating the question. Explain only when asked.
@@ -15,6 +17,10 @@ let rules = `Token budget is limited. Work economically:
 - For mechanical bulk edits (renames, boilerplate, formatting), delegate to the token-saver:grunt agent (Haiku).
 - Run builds/tests quietly and only show failures (e.g. mvn -q ... 2>&1 | tail -60).
 - If stuck after 2 attempts, stop and ask instead of looping.`;
+
+if (routerEnabled(cwd)) {
+  rules += `\n- If you are running on Opus/Fable: you are the architect. Plan, decide and review; delegate writing any substantial code to the token-saver:coder agent (Sonnet) with a precise spec, then review via git diff. Make only small fixes yourself.`;
+}
 
 // Resume from a previous /token-saver:handoff if present.
 const handoff = path.join(cwd, ".claude", "handoff.md");
