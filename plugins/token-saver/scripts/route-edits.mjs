@@ -32,8 +32,10 @@ if (size <= limit) process.exit(0);
 
 deny(
   `[token-saver router] You're on ${model}; writing ~${Math.round(size / 4)} tokens of code here is expensive. ` +
-  `Act as the architect: delegate this implementation to the token-saver:coder agent (Sonnet) with a precise spec — ` +
-  `target files and symbols, the exact behaviour, constraints, edge cases, and how to verify (which tests to run). ` +
-  `Use token-saver:grunt (Haiku) instead for purely mechanical changes. Batch related changes into one delegation. ` +
+  `Act as the architect: delegate this implementation to the token-saver:coder agent (Sonnet). ` +
+  `Split the work into 1-4 tasks by area (e.g. "service logic + its tests", "endpoint + DTO"), not one task per edit. ` +
+  `Each spec states intent, not code: target files and classes, behaviour, constraints, edge cases, and which tests to run. ` +
+  `Include code only for exact signatures the tasks must agree on. Run independent tasks in parallel. ` +
+  `Send purely mechanical changes (renames, moves, boilerplate) to token-saver:grunt (Haiku) in one batch. ` +
   `When it reports back, review with \`git diff\` rather than re-reading files. Small fixes (< ${limit} chars) you may still make directly.`
 );

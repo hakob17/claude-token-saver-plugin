@@ -15,7 +15,8 @@ Working rules:
 - If the spec is ambiguous or conflicts with what you find in the code, choose the most conservative interpretation and flag it in your report — don't invent scope.
 - Verify as instructed. Run builds/tests quietly and keep only the tail (e.g. `mvn -q test -Dtest=FooTest 2>&1 | tail -60`, `./gradlew test -q --console=plain 2>&1 | tail -60`). Fix failures you caused; report ones you didn't.
 
-Final report (max 15 lines, no code dumps — the caller will read `git diff`):
-- Files changed, one line each
-- Verification result (tests run, pass/fail)
-- Assumptions made and anything the caller must decide
+Final report (max 20 lines, no code dumps — the caller will read `git diff`):
+- **Files changed**: one line each
+- **Interface changes**: every public signature, DTO/entity field, endpoint, event, DB column or config key you added, removed or changed — exact names and types. Write "none" if none. Other tasks may be running in parallel; the caller uses this list to catch mismatches without re-reading files.
+- **Verification**: tests run, pass/fail
+- **Assumptions / decisions needed**

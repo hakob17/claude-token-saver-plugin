@@ -3,10 +3,15 @@
 import { readStdin, addContext, loadState, saveState, currentContextTokens, CONFIG } from "./lib.mjs";
 
 const input = readStdin();
+
+// New user turn: reset the per-turn delegation counter used by the router.
+const state = loadState(input.session_id);
+state.data.delegations = 0;
+saveState(state);
+
 const tokens = currentContextTokens(input.transcript_path);
 if (!tokens) process.exit(0);
 
-const state = loadState(input.session_id);
 const k = Math.round(tokens / 1000);
 
 // Reset flags after a compaction shrank the context.

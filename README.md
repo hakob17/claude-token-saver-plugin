@@ -107,8 +107,8 @@ Plugins can't switch the model mid-conversation, so the router makes Opus **dele
       router hook ── blocks it: "delegate to coder with a precise spec"
            │
            ▼
-      coder (Sonnet)                implements, runs tests quietly,
-           │                        returns a ≤15-line report
+      coder (Sonnet) × 1–4          one task per area, in parallel;
+           │                        returns files + interface changes
            ▼
       Opus reviews `git diff`       instead of re-reading the files
 ```
@@ -116,6 +116,10 @@ Plugins can't switch the model mid-conversation, so the router makes Opus **dele
 - **What counts as "big":** a `Write` over 1,500 characters, or an `Edit`/`MultiEdit` over 800 characters of new code.
 - **Small fixes stay on Opus.** The subagent starts with a fresh context and has to re-read files, so delegating a 3-line fix would cost more than it saves.
 - **Only the main thread is routed.** Edits made by subagents, and sessions running Sonnet or Haiku, are never touched.
+- **Right-sized splitting.** Opus is told to split work into 1–4 tasks *by area* ("service logic + its tests", "endpoint + DTO"), not one task per edit, and to run independent tasks in parallel. Mechanical changes go to Haiku in one batch.
+- **Specs must be intent, not code.** If Opus puts more than ~600 characters of code into a delegation prompt, it's blocked: Opus has already paid its own (expensive) output price for that code, so handing it over saves nothing. Exact signatures the tasks must agree on are fine.
+- **No fan-out of tiny tasks.** Every subagent pays a fixed start-up cost and re-reads files, so after 4 coding delegations in one request, Opus is told to batch the rest. The count resets on each new message.
+- **Interface-change reports.** The coder lists every public signature, DTO field, endpoint, event, column or config key it changed, so Opus can catch mismatches between parallel tasks without re-reading files.
 - The current model is detected from the session transcript, so it follows `/model` switches.
 - Turn it off per project with `/token-saver:router off`, or everywhere with `TOKEN_SAVER_ROUTER=off`.
 
@@ -171,6 +175,8 @@ Set these as environment variables, e.g. in the `env` block of `~/.claude/settin
 | `TOKEN_SAVER_ROUTER` | on | `off` disables the router everywhere |
 | `TOKEN_SAVER_ROUTE_WRITE_CHARS` | `1500` | `Write` size that triggers routing |
 | `TOKEN_SAVER_ROUTE_EDIT_CHARS` | `800` | `Edit`/`MultiEdit` size that triggers routing |
+| `TOKEN_SAVER_SPEC_CODE_CHARS` | `600` | Max code allowed inside a delegation spec |
+| `TOKEN_SAVER_MAX_DELEGATIONS` | `4` | Coding delegations per request before batching is required |
 
 Example:
 ```json
@@ -211,6 +217,7 @@ plugins/token-saver/
     guard-read.mjs                  read guard
     guard-bash.mjs                  bash guard
     route-edits.mjs                 Opus → Sonnet router
+    guard-delegation.mjs            spec checker: no code in specs, no tiny-task fan-out
     model-switch.mjs                tracks /model changes
     lib.mjs                         shared helpers and thresholds
   agents/   coder.md  grunt.md  scout.md

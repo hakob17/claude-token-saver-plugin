@@ -19,7 +19,7 @@ let rules = `Token budget is limited. Work economically:
 - If stuck after 2 attempts, stop and ask instead of looping.`;
 
 if (routerEnabled(cwd)) {
-  rules += `\n- If you are running on Opus/Fable: you are the architect. Plan, decide and review; delegate writing any substantial code to the token-saver:coder agent (Sonnet) with a precise spec, then review via git diff. Make only small fixes yourself.`;
+  rules += `\n- If you are running on Opus/Fable: you are the architect. Plan, decide and review; delegate substantial code to the token-saver:coder agent (Sonnet) in 1-4 area-based tasks whose specs state intent, not code; send mechanical changes to token-saver:grunt in one batch; then review via git diff and the agents' interface-change lists. Make only small fixes yourself.`;
 }
 
 // Resume from a previous /token-saver:handoff if present.
