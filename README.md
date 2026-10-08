@@ -11,6 +11,10 @@ Most token spend in Claude Code isn't your prompts. It's **context**: every turn
 
 Requires **Node 18+** and Claude Code with plugin support.
 
+> **Two plugins in this repo:**
+> - **`token-saver`** (this page) — for Claude Code: terminal, IDE extensions, and the desktop app's Code tab.
+> - **[`token-saver-desktop`](plugins/token-saver-desktop/README.md)** — for chat and knowledge work in the Claude desktop app: economical defaults plus `/handoff`, `/resume`, `/pick-model`, `/sharpen-prompt`, `/digest` and `/lean-mode`. Install it with `/plugin install token-saver-desktop@token-saver-marketplace`, or download [`dist/token-saver-desktop.plugin`](dist/token-saver-desktop.plugin) and open it in the desktop app.
+
 ---
 
 ## Quick start

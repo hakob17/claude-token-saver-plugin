@@ -1,11 +1,18 @@
 {
   "name": "token-saver-marketplace",
-  "owner": { "name": "Hakob" },
+  "owner": {
+    "name": "Hakob"
+  },
   "plugins": [
     {
       "name": "token-saver",
       "source": "./plugins/token-saver",
       "description": "Cuts Claude Code token spend: blocks wasteful reads and noisy build output, nudges compaction, adds cheap Haiku helpers and a handoff/resume flow."
+    },
+    {
+      "name": "token-saver-desktop",
+      "source": "./plugins/token-saver-desktop",
+      "description": "Desktop app / chat version: economical defaults, chat handoff/resume, model-choice advice, prompt sharpening, document digests."
     }
   ]
 }
