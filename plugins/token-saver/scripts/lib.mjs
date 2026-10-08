@@ -147,11 +147,17 @@ export function rememberModel(sessionId, model) {
   saveState(state);
 }
 
-// Router is on unless disabled by env or a per-project marker file.
+// Router is OPT-IN. Benchmarks showed that blocking Opus's writes and handing
+// them to Sonnet costs more than it saves (the blocked code has already been
+// generated in Opus output tokens). Enable with TOKEN_SAVER_ROUTER=on or the
+// per-project marker file .claude/token-saver-router-on.
 export function routerEnabled(cwd) {
-  if (/^(0|off|false)$/i.test(process.env.TOKEN_SAVER_ROUTER || "")) return false;
+  const env = process.env.TOKEN_SAVER_ROUTER || "";
+  if (/^(0|off|false)$/i.test(env)) return false;
+  if (/^(1|on|true)$/i.test(env)) return true;
   try {
-    if (fs.existsSync(path.join(cwd || process.cwd(), ".claude", "token-saver-router-off"))) return false;
-  } catch {}
-  return true;
+    return fs.existsSync(path.join(cwd || process.cwd(), ".claude", "token-saver-router-on"));
+  } catch {
+    return false;
+  }
 }

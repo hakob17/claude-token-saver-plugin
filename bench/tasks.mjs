@@ -56,6 +56,28 @@ export const TASKS = {
     },
   },
 
+  bigfeature: {
+    title: "Large feature: bonus / wagering module",
+    fixture: { bug: false },
+    prompt:
+      "Add a bonus module. An operator can grant a bonus to an account: amount, wagering multiplier (e.g. 10 means the player " +
+      "must stake 10x the bonus amount) and an expiry time. Bonus funds are tracked separately from the cash balance. Every bet " +
+      "the account places counts its stake toward wagering progress of its active bonuses. When the requirement is met, the bonus " +
+      "amount is converted into real wallet balance (credited) and the bonus is marked COMPLETED. Bonuses past expiry are FORFEITED " +
+      "(use the clock util) and can also be forfeited manually. Expose it in the API: POST /bonuses (grant, body { userId, amount, " +
+      "multiplier, expiresAt }), GET /bonuses/:userId (list with progress), POST /bonuses/:id/forfeit. Put the code in src/bonus/. " +
+      "Add thorough tests (granting, progress from bets, completion, expiry, manual forfeit, validation, API) and make sure the " +
+      "whole test suite passes.",
+    check(dir) {
+      const t = runTests(dir);
+      const files = sh(dir, "ls src/bonus 2>/dev/null | wc -l").trim();
+      const api = Number(sh(dir, "grep -c bonus src/api/handlers.js").trim());
+      const betsHook = Number(sh(dir, "(grep -rli bonus src/bets; grep -rlE 'placeBet|bets/' src/bonus) 2>/dev/null | wc -l").trim());
+      const ok = t.fail === 0 && t.pass >= BASE_TESTS + 8 && Number(files) > 0 && api > 0 && betsHook > 0;
+      return { ok, detail: `tests ${t.pass} pass / ${t.fail} fail (+${t.pass - BASE_TESTS} new), src/bonus files:${files}, api:${api > 0}, bets integration:${betsHook > 0}` };
+    },
+  },
+
   explain: {
     title: "Explain where/how payout is computed",
     fixture: { bug: false },

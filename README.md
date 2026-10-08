@@ -8,7 +8,7 @@ Most token spend isn't your prompts. It's **context**: every message resends the
 
 | You use Claude in… | Install | What you get |
 |---|---|---|
-| **Claude Code**: terminal, VS Code / JetBrains extensions, or the desktop app's **Code** tab | [`token-saver`](#token-saver-for-claude-code) | Hard guards against wasteful reads and noisy build output, context warnings, Opus → Sonnet code router, Haiku helpers, handoff/resume, cost status line |
+| **Claude Code**: terminal, VS Code / JetBrains extensions, or the desktop app's **Code** tab | [`token-saver`](#token-saver-for-claude-code) | Hard guards against wasteful reads and noisy build output, context warnings, Haiku helpers, optional Opus → Sonnet router, handoff/resume, cost status line |
 | **The Claude desktop app** for chat, documents and research | [`token-saver-desktop`](plugins/token-saver-desktop/README.md) | Economical defaults every chat, plus `/handoff`, `/resume`, `/pick-model`, `/sharpen-prompt`, `/digest`, `/lean-mode` |
 
 Using both? Install both; they don't overlap.
@@ -24,6 +24,17 @@ Using both? Install both; they don't overlap.
 **Desktop app**: download [`dist/token-saver-desktop.plugin`](dist/token-saver-desktop.plugin) and open it in the app (it shows a preview with an install button). If your app supports adding marketplaces, add `hakob17/claude-token-saver-plugin` and install `token-saver-desktop` instead.
 
 The rest of this page covers `token-saver` for Claude Code. The desktop plugin has [its own README](plugins/token-saver-desktop/README.md).
+
+### Does it work? Benchmark
+
+Measured with an A/B benchmark (Claude Code with vs without the plugin, same tasks, automatic quality checks, 3 runs each):
+
+| | Without plugin | With plugin | Saving | Quality |
+|---|---|---|---|---|
+| **Opus**, mean cost per task (5 tasks) | $0.215 | $0.185 | **−14%** | 15/15 vs 15/15 |
+| **Sonnet**, mean cost per task (4 tasks) | $0.064 | $0.065 | ±0% (noise) | 12/12 vs 12/12 |
+
+Opus savings come mainly from shorter output. Sonnet is already frugal on single requests. The biggest savings the plugin targets (long sessions: context warnings, handoff/resume) aren't covered by this benchmark yet. Full results, method and caveats: [bench/README.md](bench/README.md).
 
 ---
 
@@ -96,36 +107,17 @@ Tracks how big the conversation context is:
 - **~80k tokens** — if you've switched to a new task, Claude suggests `/clear`.
 - **~150k tokens** — Claude tells you to run `/token-saver:handoff`, then `/clear`.
 
-### 5. Opus → Sonnet router
-Plugins can't switch the model mid-conversation, so the router makes Opus **delegate** instead.
+### 5. Opus → Sonnet router *(experimental, off by default)*
 
-```
- You ──► Opus (architect)           plans, decides, reviews
-           │
-           │  tries to write a big chunk of code
-           ▼
-      router hook ── blocks it: "delegate to coder with a precise spec"
-           │
-           ▼
-      coder (Sonnet) × 1–4          one task per area, in parallel;
-           │                        returns files + interface changes
-           ▼
-      Opus reviews `git diff`       enforced; fixes go back to coder,
-                                    not rewritten by Opus
-```
+> **Benchmarked and found not to pay off**, so it's opt-in. Hooks can only react *after* Opus has generated a tool call, so by the time a large write is blocked, Opus has already paid for writing that code. In testing, Opus also kept writing implementations itself despite instructions to delegate upfront. On a large feature, routing cost **+31%** with no quality gain ([details](bench/README.md)). If you want Opus-quality planning with Sonnet-priced coding, switch models yourself: `/model opusplan` (Opus in plan mode, Sonnet when executing) or plan on Opus, then `/model sonnet` to implement.
 
-- **What counts as "big":** a `Write` over 1,500 characters, or an `Edit`/`MultiEdit` over 800 characters of new code.
-- **Small fixes stay on Opus.** The subagent starts with a fresh context and has to re-read files, so delegating a 3-line fix would cost more than it saves.
-- **Only the main thread is routed.** Edits made by subagents, and sessions running Sonnet or Haiku, are never touched.
-- **Right-sized splitting.** Opus is told to split work into 1–4 tasks *by area* ("service logic + its tests", "endpoint + DTO"), not one task per edit, and to run independent tasks in parallel. Mechanical changes go to Haiku in one batch.
-- **Specs must be intent, not code.** If Opus puts more than ~600 characters of code into a delegation prompt, it's blocked: Opus has already paid its own (expensive) output price for that code, so handing it over saves nothing. Exact signatures the tasks must agree on are fine.
-- **No fan-out of tiny tasks.** Every subagent pays a fixed start-up cost and re-reads files, so after 4 coding delegations in one request, Opus is told to batch the rest. The count resets on each new message.
-- **Interface-change reports.** The coder lists every public signature, DTO field, endpoint, event, column or config key it changed, so Opus can catch mismatches between parallel tasks without re-reading files.
-- **Guaranteed review.** When a coding agent finishes, Opus is reminded to review cheaply: `git diff --stat`, then only the hunks that matter, checking the diff against the spec, the interface-change lists against each other, and the test results. Problems go back to the same agent (or a new short coder task) instead of Opus rewriting the code. If Opus tries to finish without running `git diff`, it's stopped once and told to review first. (Git repos only; with parallel tasks, it reviews once at the end.)
-- The current model is detected from the session transcript, so it follows `/model` switches.
-- Turn it off per project with `/token-saver:router off`, or everywhere with `TOKEN_SAVER_ROUTER=off`.
+When enabled (`/token-saver:router on`, or `TOKEN_SAVER_ROUTER=on`) and the session runs on Opus/Fable:
 
-> Built-in alternative: `/model opusplan` uses Opus in plan mode and Sonnet once you approve the plan. The router works in normal mode too and keeps Opus as the reviewer.
+- Opus is told to delegate large implementations (≈150+ lines or 3+ files) to the `coder` agent (Sonnet) **before** writing, in 1–4 area-based tasks whose specs state intent, not code.
+- Large writes on the main thread (a `Write` or shell-written file over 6,000 characters, an `Edit` over 3,000) are blocked with instructions to delegate. Code written through the shell (heredocs, `python3 -`, `sed -i`) is caught too.
+- Delegation prompts carrying more than ~600 characters of code are blocked (the code has already been paid for at Opus prices), and more than 4 coding delegations per request must be batched.
+- The coder reports interface changes; when it finishes, Opus must review via `git diff` before finishing, and send fixes back rather than rewriting.
+- Subagent edits and Sonnet/Haiku sessions are never touched.
 
 ### 6. Status line *(Option B)*
 ```
@@ -150,7 +142,7 @@ Added to `~/.claude/settings.json` only where you haven't set your own value:
 | `/token-saver:find <question>` | Codebase search on Haiku; returns `file:line` locations and a short answer. |
 | `/token-saver:grunt <change>` | Mechanical edit on Haiku (renames, boilerplate, formatting). |
 | `/token-saver:review-diff [base]` | Reviews only the git diff, not whole files; reports real issues only. |
-| `/token-saver:router on\|off\|status` | Toggles the Opus → Sonnet router for the current project. |
+| `/token-saver:router on\|off\|status` | Toggles the experimental Opus → Sonnet router for the current project (off by default). |
 
 The biggest single habit: **`/token-saver:handoff` → `/clear` → `/token-saver:resume`** whenever a session gets long or you switch tasks.
 
@@ -174,9 +166,9 @@ Set these as environment variables, e.g. in the `env` block of `~/.claude/settin
 | `TOKEN_SAVER_MAX_READ_LINES` | `600` | Range size suggested to Claude |
 | `TOKEN_SAVER_CONTEXT_WARN` | `80000` | First context warning (tokens) |
 | `TOKEN_SAVER_CONTEXT_URGENT` | `150000` | Urgent context warning (tokens) |
-| `TOKEN_SAVER_ROUTER` | on | `off` disables the router everywhere |
-| `TOKEN_SAVER_ROUTE_WRITE_CHARS` | `1500` | `Write` size that triggers routing |
-| `TOKEN_SAVER_ROUTE_EDIT_CHARS` | `800` | `Edit`/`MultiEdit` size that triggers routing |
+| `TOKEN_SAVER_ROUTER` | off | `on` enables the experimental router everywhere; `off` forces it off |
+| `TOKEN_SAVER_ROUTE_WRITE_CHARS` | `6000` | `Write` size that triggers routing |
+| `TOKEN_SAVER_ROUTE_EDIT_CHARS` | `3000` | `Edit`/`MultiEdit` size that triggers routing |
 | `TOKEN_SAVER_SPEC_CODE_CHARS` | `600` | Max code allowed inside a delegation spec |
 | `TOKEN_SAVER_MAX_DELEGATIONS` | `4` | Coding delegations per request before batching is required |
 
@@ -194,7 +186,7 @@ Example:
 
 ## Limitations
 
-- The router **guides** Opus to delegate; it can't force the model to change. A model can still choose to make many small edits itself.
+- The router can't switch the model; it can only block after Opus has generated a write, which is why it's off by default.
 - Delegation has overhead: the coder re-reads the files it needs. The savings come from moving code *output* off Opus, so they're largest on bigger features.
 - Context size is read from the session transcript, which is an internal format and could change between Claude Code versions. If it can't be read, the context watch and status line simply stay quiet.
 - Hook state is kept in the plugin's data directory (or your temp folder) per session.
