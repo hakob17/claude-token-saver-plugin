@@ -1,6 +1,8 @@
 # token-saver-desktop
 
-The Claude desktop app version of token-saver: helps Claude spend fewer credits in everyday chat and knowledge work.
+The Claude desktop app version of [token-saver](../../README.md): helps Claude spend fewer credits in everyday chat, document work and research.
+
+Long chats are the biggest hidden cost. Every message resends the entire conversation, so message 40 costs far more than message 1. This plugin keeps answers lean by default and makes it easy to start fresh without losing context.
 
 > Using the desktop app's **Code** tab? That runs Claude Code, so install the main `token-saver` plugin instead — it has the stronger, code-specific guards.
 
@@ -39,3 +41,17 @@ The skills also trigger from plain language ("this chat is getting long", "which
 ## Install
 
 Download [`dist/token-saver-desktop.plugin`](../../dist/token-saver-desktop.plugin) and open it in the desktop app (it shows a preview with an install button), or add the marketplace `hakob17/claude-token-saver-plugin` and install `token-saver-desktop`.
+
+To turn the automatic rules down for one chat, just tell Claude ("give me the full detailed version", "search as much as you need"). Your request in the chat always wins.
+
+## How it works
+
+- `hooks/hooks.json` runs at the start of each session and loads `context/economy-rules.md` into Claude's context. The rules are short on purpose, since they're part of every message.
+- Each skill in `skills/` loads only when you invoke it or ask for it in plain words, so unused skills cost nothing.
+- These are instructions, not hard blocks: Claude follows them, but nothing is forcibly prevented. For enforced guards, use the Claude Code plugin.
+
+## Limitations
+
+- Claude can't change the model for you. `/pick-model` recommends one, and you switch it in the model picker.
+- Handoff notes are summaries. Check that anything critical (exact figures, approved wording) made it into the note before starting the new chat.
+- Not tested on every desktop app version; if skills don't appear after installing, restart the app.

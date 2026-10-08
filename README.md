@@ -1,8 +1,33 @@
+# Claude token savers
+
+Two plugins that make your Claude credits last longer, automatically, without changing how you work.
+
+Most token spend isn't your prompts. It's **context**: every message resends the whole conversation, plus every file Claude read and every line of output it saw. On Opus, the other big cost is **output**, especially writing code. These plugins attack both.
+
+## Which plugin do I need?
+
+| You use Claude in… | Install | What you get |
+|---|---|---|
+| **Claude Code**: terminal, VS Code / JetBrains extensions, or the desktop app's **Code** tab | [`token-saver`](#token-saver-for-claude-code) | Hard guards against wasteful reads and noisy build output, context warnings, Opus → Sonnet code router, Haiku helpers, handoff/resume, cost status line |
+| **The Claude desktop app** for chat, documents and research | [`token-saver-desktop`](plugins/token-saver-desktop/README.md) | Economical defaults every chat, plus `/handoff`, `/resume`, `/pick-model`, `/sharpen-prompt`, `/digest`, `/lean-mode` |
+
+Using both? Install both; they don't overlap.
+
+### Install in one minute
+
+**Claude Code**, from inside a session:
+```
+/plugin marketplace add hakob17/claude-token-saver-plugin
+/plugin install token-saver@token-saver-marketplace
+```
+
+**Desktop app**: download [`dist/token-saver-desktop.plugin`](dist/token-saver-desktop.plugin) and open it in the app (it shows a preview with an install button). If your app supports adding marketplaces, add `hakob17/claude-token-saver-plugin` and install `token-saver-desktop` instead.
+
+The rest of this page covers `token-saver` for Claude Code. The desktop plugin has [its own README](plugins/token-saver-desktop/README.md).
+
+---
+
 # token-saver for Claude Code
-
-A Claude Code plugin that makes your credits last longer — automatically, without changing how you work.
-
-Most token spend in Claude Code isn't your prompts. It's **context**: every turn resends the whole conversation, plus every file Claude read and every line of build output it saw. And on Opus, the expensive part is **output** — writing code. token-saver attacks both:
 
 - keeps junk out of context (huge files, build logs, recursive listings)
 - warns you before a session gets bloated, and gives you a cheap way to restart it
@@ -10,12 +35,6 @@ Most token spend in Claude Code isn't your prompts. It's **context**: every turn
 - pushes searches and mechanical edits to Haiku
 
 Requires **Node 18+** and Claude Code with plugin support.
-
-> **Two plugins in this repo:**
-> - **`token-saver`** (this page) — for Claude Code: terminal, IDE extensions, and the desktop app's Code tab.
-> - **[`token-saver-desktop`](plugins/token-saver-desktop/README.md)** — for chat and knowledge work in the Claude desktop app: economical defaults plus `/handoff`, `/resume`, `/pick-model`, `/sharpen-prompt`, `/digest` and `/lean-mode`. Install it with `/plugin install token-saver-desktop@token-saver-marketplace`, or download [`dist/token-saver-desktop.plugin`](dist/token-saver-desktop.plugin) and open it in the desktop app.
-
----
 
 ## Quick start
 
@@ -42,7 +61,7 @@ Restart Claude Code after installing.
 
 If the `claude` CLI isn't on your PATH, the installer prints the two `/plugin` commands to run inside Claude Code instead.
 
-**Updating:** `/plugin marketplace update token-saver-marketplace`, then restart. (Option B: `git pull` first.)
+**Updating:** `/plugin marketplace update token-saver-marketplace`, then restart. (Option B: `git pull` first.) This updates both plugins.
 
 ---
 
@@ -177,7 +196,12 @@ Example:
 ## Project layout
 
 ```
-.claude-plugin/marketplace.json     marketplace entry (install source)
+.claude-plugin/marketplace.json     marketplace listing both plugins
+dist/token-saver-desktop.plugin     packaged desktop plugin (open in the desktop app)
+plugins/token-saver-desktop/        desktop app plugin (see its README)
+  hooks/hooks.json                  loads the economy rules at session start
+  context/economy-rules.md          the always-on rules
+  skills/                           lean-mode, handoff, resume, pick-model, sharpen-prompt, digest
 plugins/token-saver/
   .claude-plugin/plugin.json        plugin manifest
   hooks/hooks.json                  hook wiring
