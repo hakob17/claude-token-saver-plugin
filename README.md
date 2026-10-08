@@ -1,62 +1,194 @@
 # token-saver for Claude Code
 
-Makes Claude Code spend fewer tokens automatically. Requires Node 18+.
+A Claude Code plugin that makes your credits last longer — automatically, without changing how you work.
 
-## Install
+Most token spend in Claude Code isn't your prompts. It's **context**: every turn resends the whole conversation, plus every file Claude read and every line of build output it saw. And on Opus, the expensive part is **output** — writing code. token-saver attacks both:
 
-Plugin only, straight from GitHub (inside Claude Code):
+- keeps junk out of context (huge files, build logs, recursive listings)
+- warns you before a session gets bloated, and gives you a cheap way to restart it
+- lets Opus think, but hands the code writing to Sonnet
+- pushes searches and mechanical edits to Haiku
+
+Requires **Node 18+** and Claude Code with plugin support.
+
+---
+
+## Quick start
+
+**Option A — plugin only**, from inside Claude Code:
 ```
 /plugin marketplace add hakob17/claude-token-saver-plugin
 /plugin install token-saver@token-saver-marketplace
 ```
 
-Plugin + status line + recommended settings:
+**Option B — plugin + status line + recommended settings:**
 ```bash
-git clone https://github.com/hakob17/claude-token-saver-plugin && cd claude-token-saver-plugin
-node install.mjs                 # plugin + recommended settings (backs up your settings.json)
-node install.mjs --no-settings   # plugin only
-node install.mjs --uninstall     # remove everything, restore settings backup
+git clone https://github.com/hakob17/claude-token-saver-plugin
+cd claude-token-saver-plugin
+node install.mjs
 ```
 
-Then restart Claude Code. If the `claude` CLI isn't on your PATH, run inside Claude Code:
-```
-/plugin marketplace add /path/to/token-saver
-/plugin install token-saver@token-saver-marketplace
-```
+Restart Claude Code after installing.
 
-## What it does automatically
-
-| Piece | Effect |
+| Installer flag | Effect |
 |---|---|
-| **Session rules** (SessionStart hook) | Short instructions to be terse, edit instead of rewrite, Grep before Read, delegate searches to Haiku, keep build output quiet. |
-| **Read guard** | Blocks full reads of files over ~40 KB and of `target/`, `build/`, `node_modules/`, lockfiles, logs, `.class`. Claude is told to Grep then read a range. Repeating the identical call lets it through, so it never gets stuck. |
-| **Bash guard** | Blocks unfiltered `mvn`/`gradle`/`npm` runs, `cat` of big files, `grep -r`, `find .`, `tree`. Suggests the quiet version (e.g. `mvn test -q 2>&1 \| tail -60`). Same repeat-to-allow escape. |
-| **Context watch** | At ~80k context tokens, Claude suggests `/clear` if you switched tasks. At ~150k it tells you to hand off and clear. |
-| **Status line** | `[model] $cost · ctx 45k`. Turns yellow/red as cost and context grow, and flags Opus. |
-| **Opus → Sonnet router** | When the main thread runs Opus/Fable, any substantial code write (Write > 1500 chars, Edit > 800 chars) is blocked and Opus is told to hand it to the `coder` agent (Sonnet) with a precise spec, then review via `git diff`. Small fixes stay on Opus (delegating them would cost more than it saves). Subagent edits and Sonnet/Haiku sessions are never touched. |
-| **Settings** (installer) | Default model `sonnet`, effort `medium`, deny-reads for build/vendor folders. Your existing values are kept. |
+| *(none)* | Installs the plugin, the status line and the recommended settings. Backs up `~/.claude/settings.json` first. |
+| `--no-settings` | Plugin only; your settings file is left alone. |
+| `--uninstall` | Removes the plugin and status line, restores the settings backup. |
+
+If the `claude` CLI isn't on your PATH, the installer prints the two `/plugin` commands to run inside Claude Code instead.
+
+**Updating:** `/plugin marketplace update token-saver-marketplace`, then restart. (Option B: `git pull` first.)
+
+---
+
+## What happens automatically
+
+### 1. Session rules
+At session start Claude gets a short set of rules: be terse, edit rather than rewrite, Grep before Read, delegate broad searches to Haiku, keep build output quiet, stop and ask after two failed attempts. Kept deliberately short, since this text is sent on every turn.
+
+### 2. Read guard
+Blocks reading, in full:
+- files larger than ~40 KB (~10k tokens) — Claude is told to Grep for the part it needs and read just that range;
+- generated or vendored files: `target/`, `build/`, `dist/`, `node_modules/`, `.gradle/`, `.idea/`, lockfiles, `*.min.js`, `*.map`, `*.class`, `*.jar`, logs.
+
+### 3. Bash guard
+Blocks commands that dump thousands of lines into context, and tells Claude the cheaper version:
+
+| Blocked | Suggested instead |
+|---|---|
+| `mvn clean test` | `mvn clean test -q 2>&1 \| tail -60` |
+| `./gradlew build` | `./gradlew build -q --console=plain 2>&1 \| tail -60` |
+| `npm install` | `npm install --silent 2>&1 \| tail -60` |
+| `cat BigFile.java` | Grep, or Read with offset/limit |
+| `grep -r foo .` | the Grep tool (respects `.gitignore`) |
+| `find .`, `tree`, `ls -R` | Glob, or limit depth |
+
+Commands already piped to `tail`/`head`/`grep`, redirected to a file, or using a quiet flag pass through.
+
+> **Never stuck:** if Claude really needs the full read or output, repeating the exact same call is allowed through.
+
+### 4. Context watch
+Tracks how big the conversation context is:
+- **~80k tokens** — if you've switched to a new task, Claude suggests `/clear`.
+- **~150k tokens** — Claude tells you to run `/token-saver:handoff`, then `/clear`.
+
+### 5. Opus → Sonnet router
+Plugins can't switch the model mid-conversation, so the router makes Opus **delegate** instead.
+
+```
+ You ──► Opus (architect)           plans, decides, reviews
+           │
+           │  tries to write a big chunk of code
+           ▼
+      router hook ── blocks it: "delegate to coder with a precise spec"
+           │
+           ▼
+      coder (Sonnet)                implements, runs tests quietly,
+           │                        returns a ≤15-line report
+           ▼
+      Opus reviews `git diff`       instead of re-reading the files
+```
+
+- **What counts as "big":** a `Write` over 1,500 characters, or an `Edit`/`MultiEdit` over 800 characters of new code.
+- **Small fixes stay on Opus.** The subagent starts with a fresh context and has to re-read files, so delegating a 3-line fix would cost more than it saves.
+- **Only the main thread is routed.** Edits made by subagents, and sessions running Sonnet or Haiku, are never touched.
+- The current model is detected from the session transcript, so it follows `/model` switches.
+- Turn it off per project with `/token-saver:router off`, or everywhere with `TOKEN_SAVER_ROUTER=off`.
+
+> Built-in alternative: `/model opusplan` uses Opus in plan mode and Sonnet once you approve the plan. The router works in normal mode too and keeps Opus as the reviewer.
+
+### 6. Status line *(Option B)*
+```
+[Sonnet 5.5] $0.84 · ctx 45k
+```
+Cost turns yellow at $2 and red at $5; context turns yellow at 80k and red at 150k; Opus/Fable are flagged with `$$$`.
+
+### 7. Recommended settings *(Option B)*
+Added to `~/.claude/settings.json` only where you haven't set your own value:
+- `"model": "sonnet"` — switch with `/model opus` when a problem really needs it
+- `"effortLevel": "medium"` — less thinking spend on routine work
+- `permissions.deny` read rules for `node_modules`, `target`, `build`, `.gradle`, `dist`, minified JS and lockfiles
+
+---
 
 ## Commands
 
-- `/token-saver:handoff [focus]` — writes `.claude/handoff.md`; then `/clear`
-- `/token-saver:resume` — continue from the handoff in a fresh, cheap context
-- `/token-saver:find <question>` — codebase search on Haiku, returns `file:line` list
-- `/token-saver:grunt <change>` — mechanical edits on Haiku
-- `/token-saver:review-diff [base]` — review only the git diff
-- `/token-saver:router on|off|status` — toggle the Opus→Sonnet router for this project
+| Command | What it does |
+|---|---|
+| `/token-saver:handoff [focus]` | Writes a dense summary of the session to `.claude/handoff.md`. Then run `/clear`. |
+| `/token-saver:resume [instruction]` | Continues from the handoff in a fresh, cheap context — no re-exploring. |
+| `/token-saver:find <question>` | Codebase search on Haiku; returns `file:line` locations and a short answer. |
+| `/token-saver:grunt <change>` | Mechanical edit on Haiku (renames, boilerplate, formatting). |
+| `/token-saver:review-diff [base]` | Reviews only the git diff, not whole files; reports real issues only. |
+| `/token-saver:router on\|off\|status` | Toggles the Opus → Sonnet router for the current project. |
+
+The biggest single habit: **`/token-saver:handoff` → `/clear` → `/token-saver:resume`** whenever a session gets long or you switch tasks.
 
 ## Agents
 
-- `token-saver:coder` — Sonnet, implements from a spec, runs tests quietly, short report
-- `token-saver:grunt` — Haiku, mechanical edits
-- `token-saver:scout` — Haiku, read-only code search
+| Agent | Model | Use |
+|---|---|---|
+| `token-saver:coder` | Sonnet | Implements code from a spec; runs tests quietly; short report. |
+| `token-saver:grunt` | Haiku | Mechanical, well-specified edits. |
+| `token-saver:scout` | Haiku | Read-only search; returns locations, not file contents. |
 
-Typical flow on Opus: describe the feature → Opus plans → `coder` (Sonnet) writes it → Opus reviews the diff.
-Built-in alternative: `/model opusplan` uses Opus in plan mode and Sonnet for execution.
+---
 
-## Tuning (env vars, e.g. in settings.json `env`)
+## Configuration
 
-`TOKEN_SAVER_MAX_READ_BYTES` (40000), `TOKEN_SAVER_CONTEXT_WARN` (80000), `TOKEN_SAVER_CONTEXT_URGENT` (150000),
-`TOKEN_SAVER_ROUTER` (`off` disables), `TOKEN_SAVER_ROUTE_WRITE_CHARS` (1500), `TOKEN_SAVER_ROUTE_EDIT_CHARS` (800).
+Set these as environment variables, e.g. in the `env` block of `~/.claude/settings.json`:
 
-Switch models when needed: `/model opus` for hard problems, `/model sonnet` to go back. Check spend with `/cost`.
+| Variable | Default | Meaning |
+|---|---|---|
+| `TOKEN_SAVER_MAX_READ_BYTES` | `40000` | Read guard size limit |
+| `TOKEN_SAVER_MAX_READ_LINES` | `600` | Range size suggested to Claude |
+| `TOKEN_SAVER_CONTEXT_WARN` | `80000` | First context warning (tokens) |
+| `TOKEN_SAVER_CONTEXT_URGENT` | `150000` | Urgent context warning (tokens) |
+| `TOKEN_SAVER_ROUTER` | on | `off` disables the router everywhere |
+| `TOKEN_SAVER_ROUTE_WRITE_CHARS` | `1500` | `Write` size that triggers routing |
+| `TOKEN_SAVER_ROUTE_EDIT_CHARS` | `800` | `Edit`/`MultiEdit` size that triggers routing |
+
+Example:
+```json
+{
+  "env": {
+    "TOKEN_SAVER_MAX_READ_BYTES": "60000",
+    "TOKEN_SAVER_ROUTE_EDIT_CHARS": "1200"
+  }
+}
+```
+
+---
+
+## Limitations
+
+- The router **guides** Opus to delegate; it can't force the model to change. A model can still choose to make many small edits itself.
+- Delegation has overhead: the coder re-reads the files it needs. The savings come from moving code *output* off Opus, so they're largest on bigger features.
+- Context size is read from the session transcript, which is an internal format and could change between Claude Code versions. If it can't be read, the context watch and status line simply stay quiet.
+- Hook state is kept in the plugin's data directory (or your temp folder) per session.
+
+---
+
+## Project layout
+
+```
+.claude-plugin/marketplace.json     marketplace entry (install source)
+plugins/token-saver/
+  .claude-plugin/plugin.json        plugin manifest
+  hooks/hooks.json                  hook wiring
+  scripts/
+    session-start.mjs               session rules, model detection, handoff hint
+    context-watch.mjs               context size warnings
+    guard-read.mjs                  read guard
+    guard-bash.mjs                  bash guard
+    route-edits.mjs                 Opus → Sonnet router
+    model-switch.mjs                tracks /model changes
+    lib.mjs                         shared helpers and thresholds
+  agents/   coder.md  grunt.md  scout.md
+  commands/ handoff.md  resume.md  find.md  grunt.md  review-diff.md  router.md
+install.mjs                         installer (settings, status line, plugin)
+statusline.mjs                      status line script
+```
+
+Check what a session cost at any time with `/cost`.
