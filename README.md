@@ -4,8 +4,15 @@ Makes Claude Code spend fewer tokens automatically. Requires Node 18+.
 
 ## Install
 
+Plugin only, straight from GitHub (inside Claude Code):
+```
+/plugin marketplace add hakob17/claude-token-saver-plugin
+/plugin install token-saver@token-saver-marketplace
+```
+
+Plugin + status line + recommended settings:
 ```bash
-unzip token-saver.zip && cd token-saver
+git clone https://github.com/hakob17/claude-token-saver-plugin && cd claude-token-saver-plugin
 node install.mjs                 # plugin + recommended settings (backs up your settings.json)
 node install.mjs --no-settings   # plugin only
 node install.mjs --uninstall     # remove everything, restore settings backup
