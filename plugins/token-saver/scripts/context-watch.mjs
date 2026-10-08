@@ -7,6 +7,7 @@ const input = readStdin();
 // New user turn: reset the per-turn delegation counter used by the router.
 const state = loadState(input.session_id);
 state.data.delegations = 0;
+state.data.reviewPending = false;
 saveState(state);
 
 const tokens = currentContextTokens(input.transcript_path);

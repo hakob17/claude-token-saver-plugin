@@ -110,7 +110,8 @@ Plugins can't switch the model mid-conversation, so the router makes Opus **dele
       coder (Sonnet) × 1–4          one task per area, in parallel;
            │                        returns files + interface changes
            ▼
-      Opus reviews `git diff`       instead of re-reading the files
+      Opus reviews `git diff`       enforced; fixes go back to coder,
+                                    not rewritten by Opus
 ```
 
 - **What counts as "big":** a `Write` over 1,500 characters, or an `Edit`/`MultiEdit` over 800 characters of new code.
@@ -120,6 +121,7 @@ Plugins can't switch the model mid-conversation, so the router makes Opus **dele
 - **Specs must be intent, not code.** If Opus puts more than ~600 characters of code into a delegation prompt, it's blocked: Opus has already paid its own (expensive) output price for that code, so handing it over saves nothing. Exact signatures the tasks must agree on are fine.
 - **No fan-out of tiny tasks.** Every subagent pays a fixed start-up cost and re-reads files, so after 4 coding delegations in one request, Opus is told to batch the rest. The count resets on each new message.
 - **Interface-change reports.** The coder lists every public signature, DTO field, endpoint, event, column or config key it changed, so Opus can catch mismatches between parallel tasks without re-reading files.
+- **Guaranteed review.** When a coding agent finishes, Opus is reminded to review cheaply: `git diff --stat`, then only the hunks that matter, checking the diff against the spec, the interface-change lists against each other, and the test results. Problems go back to the same agent (or a new short coder task) instead of Opus rewriting the code. If Opus tries to finish without running `git diff`, it's stopped once and told to review first. (Git repos only; with parallel tasks, it reviews once at the end.)
 - The current model is detected from the session transcript, so it follows `/model` switches.
 - Turn it off per project with `/token-saver:router off`, or everywhere with `TOKEN_SAVER_ROUTER=off`.
 
@@ -218,6 +220,7 @@ plugins/token-saver/
     guard-bash.mjs                  bash guard
     route-edits.mjs                 Opus → Sonnet router
     guard-delegation.mjs            spec checker: no code in specs, no tiny-task fan-out
+    review-gate.mjs                 makes Opus review delegated work via git diff
     model-switch.mjs                tracks /model changes
     lib.mjs                         shared helpers and thresholds
   agents/   coder.md  grunt.md  scout.md
