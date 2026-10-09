@@ -1,5 +1,7 @@
 # Benchmark
 
+> **All results in one file: [BENCHMARKS.md](BENCHMARKS.md)** (rebuild with `node bench/all.mjs`).
+
 A/B test of Claude Code **without** vs **with** the `token-saver` plugin on a sample wallet/betting backend (plain Node, no dependencies).
 
 Each run gets a fresh copy of the project, runs `claude -p` headless, then an automatic quality check, so a cheaper run that breaks things doesn't count as a win.

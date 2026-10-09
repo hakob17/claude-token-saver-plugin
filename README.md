@@ -27,6 +27,8 @@ The rest of this page covers `token-saver` for Claude Code. The desktop plugin h
 
 ### Does it work? Benchmark
 
+All results in one file: **[bench/BENCHMARKS.md](bench/BENCHMARKS.md)**.
+
 Measured with an A/B benchmark (Claude Code with vs without the plugin, same tasks, automatic quality checks, 3 runs each):
 
 | | Without plugin | With plugin | Saving | Quality |
