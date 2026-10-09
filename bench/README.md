@@ -54,9 +54,13 @@ Sonnet 5.5 and Opus 5.5, 3 runs per task and configuration, Claude Code 2.1.294.
 - **Quality caveat:** on the large feature, Opus with the plugin wrote fewer new tests on average (28 vs 36). All checks passed, but the "be terse" rules may trim thoroughness on big jobs.
 - **Not measured:** long multi-request sessions, where the context warnings and handoff/resume are designed to help. Each run here is a single request.
 
+## Long-session benchmark
+
+`bench/long/` runs a 19-request coding day in one continuous session: without the plugin, with it, with handoff at the plugin's 80k threshold, and with a forced handoff at 50k. Results in [`long/results/summary.md`](long/results/summary.md): Opus −11%, Sonnet +12%; contexts stayed under ~90k, so the 80k handoff rarely triggered, and a forced handoff lost history from the final changelog.
+
 ## Total cost comparison
 
-Every shipped-configuration run summed, both plugins: [`results/TOTALS.md`](results/TOTALS.md). Overall **$7.56 → $6.75 (−10.7%)**; Opus −14.7%, Sonnet −1.3%. All 102 quality checks passed on both sides.
+Every shipped-configuration run summed, both plugins: [`results/TOTALS.md`](results/TOTALS.md). Overall **$14.76 → $13.83 (−6.3%)**; Opus −12.8%, Sonnet +6.2%.
 
 ## How we got here
 

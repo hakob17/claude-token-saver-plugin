@@ -9,7 +9,7 @@ Write a handoff note to `.claude/handoff.md` in the project root (create the fol
 One or two sentences.
 
 ## Done so far
-Bullets: what changed, with `file:line` references. No code blocks unless a snippet is essential.
+One bullet per change or completed request in this session, in order, including anything carried over from an earlier handoff note: never merge or drop items, since later questions like "what did we change today?" depend on this list. Keep each bullet to one line with `file` references. No code blocks unless a snippet is essential.
 
 ## Decisions & constraints
 Bullets: choices made and why, things that must not change, gotchas discovered.
