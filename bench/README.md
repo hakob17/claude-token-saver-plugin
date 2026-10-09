@@ -63,4 +63,8 @@ Sonnet 5.5 and Opus 5.5, 3 runs per task and configuration, Claude Code 2.1.294.
 
 **Conclusion on the router:** with current models, a hook can't move Opus's code-writing to Sonnet. Hooks only see a tool call after Opus has generated it, and instructions to delegate upfront weren't followed reliably. It's kept as an opt-in experiment; for Opus planning with Sonnet coding, switch models yourself (`/model opusplan`, or plan on Opus then `/model sonnet`).
 
+## Desktop plugin benchmark
+
+`bench/desktop/` measures `token-saver-desktop` on chat-style work: a question about a ~24k-token contract, a general question, revising an email paragraph, and a 9-message conversation run three ways (without plugin, with plugin, with plugin + `/handoff` after message 5 and `/resume` in a fresh chat). Run with `node bench/desktop/run.mjs`; results in [`desktop/results/summary.md`](desktop/results/summary.md). Opus −16%, Sonnet ±0%, handoff not worth it in a 9-message chat.
+
 Caveats: a small synthetic Node project, single-request tasks, 3 runs per cell. Run it on your own repo and tasks for numbers that matter to you.

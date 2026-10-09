@@ -34,7 +34,9 @@ Measured with an A/B benchmark (Claude Code with vs without the plugin, same tas
 | **Opus**, mean cost per task (5 tasks) | $0.215 | $0.185 | **−14%** | 15/15 vs 15/15 |
 | **Sonnet**, mean cost per task (4 tasks) | $0.064 | $0.065 | ±0% (noise) | 12/12 vs 12/12 |
 
-Opus savings come mainly from shorter output. Sonnet is already frugal on single requests. The biggest savings the plugin targets (long sessions: context warnings, handoff/resume) aren't covered by this benchmark yet. Full results, method and caveats: [bench/README.md](bench/README.md).
+Opus savings come mainly from shorter output. Sonnet is already frugal on single requests. Full results, method and caveats: [bench/README.md](bench/README.md).
+
+**Desktop plugin** (same method, chat-style tasks; [details](plugins/token-saver-desktop/README.md#benchmark)): Opus **−16%** on single messages and on a 9-message conversation; Sonnet ±0%. All quality checks passed. `/handoff` → `/resume` didn't pay off in a 9-message chat; it's for very long chats.
 
 ---
 

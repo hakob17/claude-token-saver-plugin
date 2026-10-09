@@ -2,7 +2,7 @@
 
 The Claude desktop app version of [token-saver](../../README.md): helps Claude spend fewer credits in everyday chat, document work and research.
 
-Long chats are the biggest hidden cost. Every message resends the entire conversation, so message 40 costs far more than message 1. This plugin keeps answers lean by default and makes it easy to start fresh without losing context.
+Every message resends the whole conversation. Prompt caching makes those repeats fairly cheap, so the main lever is how much Claude writes. This plugin keeps answers lean by default, and adds tools to start fresh when a chat gets very long.
 
 > Using the desktop app's **Code** tab? That runs Claude Code, so install the main `token-saver` plugin instead — it has the stronger, code-specific guards.
 
@@ -32,11 +32,27 @@ The skills also trigger from plain language ("this chat is getting long", "which
 
 ## Habits that save the most
 
-1. Start a new chat for each new topic (use `/handoff` → `/resume` to carry context over).
+1. Start a new chat for each new topic. Use `/handoff` → `/resume` only to continue a **very long** chat: on short chats it costs more than it saves (see benchmark below).
 2. Use Sonnet by default; switch to Opus only for genuinely hard problems.
 3. Turn extended thinking off for routine tasks.
 4. Attach a `/digest` instead of the same long PDF every time.
 5. Send one complete request instead of a vague one plus corrections.
+
+## Benchmark
+
+Measured with headless Claude Code as a stand-in for the desktop app (same models and plugin mechanism, different system prompt), 3 runs per cell, with automatic checks for the facts the user asked for. Full tables: [bench/desktop/results/summary.md](../../bench/desktop/results/summary.md).
+
+| | Without plugin | With plugin | Change |
+|---|---|---|---|
+| **Opus**, single messages (mean of 3 tasks) | $0.094 | $0.079 | **−16%** |
+| **Opus**, 9-message conversation | $0.420 | $0.354 | **−16%** |
+| **Sonnet**, single messages | $0.051 | $0.050 | ±0% (noise) |
+| **Sonnet**, 9-message conversation | $0.337 | $0.327 | −3% |
+
+- Answers were 30–50% shorter with the plugin, and every quality check passed (all facts present).
+- The biggest single win: Opus answering a question about a long contract, **−38%**.
+- Revising a paragraph cost slightly more with the plugin (+8–11%).
+- **`/handoff` → `/resume` didn't pay off in a 9-message chat** (Sonnet −1%, Opus +6% vs no plugin). Messages after the handoff were about half the price, but writing the note and rebuilding context in the new chat (Claude re-read the contract) cost more than the savings. Rough break-even is about 6–10 further messages, so use it for long chats or after a long break, not routinely.
 
 ## Install
 

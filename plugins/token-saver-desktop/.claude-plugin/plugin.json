@@ -1,6 +1,6 @@
 {
   "name": "token-saver-desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Makes Claude in the desktop app spend fewer credits: economical defaults, chat handoff/resume, model-choice advice, prompt sharpening and document digests.",
   "author": { "name": "Hakob" },
   "repository": "https://github.com/hakob17/claude-token-saver-plugin",
