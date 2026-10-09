@@ -86,7 +86,8 @@ Restart Claude Code after installing.
 |---|---|
 | *(none)* | Installs the plugin, the status line and the recommended settings. Backs up `~/.claude/settings.json` first. |
 | `--no-settings` | Plugin only; your settings file is left alone. |
-| `--uninstall` | Removes the plugin and status line, restores the settings backup. |
+| `--budget 100 [--reset-day 15]` | Also sets a monthly budget (see *Monthly budget*). |
+| `--uninstall` | Removes the plugin and status line, restores the settings backup. Spend history in `~/.claude/token-saver/` is kept. |
 
 If the `claude` CLI isn't on your PATH, the installer prints the two `/plugin` commands to run inside Claude Code instead.
 
@@ -139,9 +140,23 @@ When enabled (`/token-saver:router on`, or `TOKEN_SAVER_ROUTER=on`) and the sess
 
 ### 6. Status line *(Option B)*
 ```
-[Sonnet 5.5] $0.84 · ctx 45k
+[Sonnet 5.5] $0.84 · ctx 45k · month $42.10/$100 (42%)
 ```
-Cost turns yellow at $2 and red at $5; context turns yellow at 80k and red at 150k; Opus/Fable are flagged with `$$$`.
+Session cost turns yellow at $2 and red at $5; context turns yellow at 80k and red at 150k; Opus/Fable are flagged with `$$$`. The last part is this month's total across all your sessions (see below).
+
+### 6a. Monthly budget *(Option B)*
+For company limits like $100–150 a month. Set your limit once:
+```
+/token-saver:budget 100          # inside Claude Code
+/token-saver:budget 150 15       # $150, resetting on the 15th
+node install.mjs --budget 100    # or at install time
+```
+- The status line adds up spend across **all** your Claude Code sessions in the current budget period (calendar month by default) and shows it as `month $42.10/$100`, yellow from 80% and red from 95%.
+- When you cross **50%, 80%, 95% and 100%**, Claude tells you once in its next reply; from 80% it also suggests switching routine work to Sonnet.
+- `/token-saver:budget` (or `status`) shows where you are; `/token-saver:budget off` removes the limit.
+- Data is stored in `~/.claude/token-saver/`: one small file per session per month, so parallel sessions don't interfere. Old months are pruned after ~4 months.
+
+Limits: spend is recorded by the status line, so it only counts Claude Code sessions where the status line runs (the terminal, and the IDE extensions if they show it). Usage in the Claude apps or by other tools isn't included, and the figure is Claude Code's own cost estimate, which may differ from how your company bills.
 
 ### 7. Recommended settings *(Option B)*
 Added to `~/.claude/settings.json` only where you haven't set your own value:
@@ -160,6 +175,7 @@ Added to `~/.claude/settings.json` only where you haven't set your own value:
 | `/token-saver:find <question>` | Codebase search on Haiku; returns `file:line` locations and a short answer. |
 | `/token-saver:grunt <change>` | Mechanical edit on Haiku (renames, boilerplate, formatting). |
 | `/token-saver:review-diff [base]` | Reviews only the git diff, not whole files; reports real issues only. |
+| `/token-saver:budget <amount> [reset-day]\|status\|off` | Sets or shows your monthly budget; the status line tracks spend and Claude warns at 50/80/95/100%. |
 | `/token-saver:router on\|off\|status` | Toggles the experimental Opus → Sonnet router for the current project (off by default). |
 
 The biggest single habit: **`/token-saver:handoff` → `/clear` → `/token-saver:resume`** whenever a session gets long or you switch tasks.
@@ -187,6 +203,8 @@ Set these as environment variables, e.g. in the `env` block of `~/.claude/settin
 | `TOKEN_SAVER_ROUTER` | off | `on` enables the experimental router everywhere; `off` forces it off |
 | `TOKEN_SAVER_ROUTE_WRITE_CHARS` | `6000` | `Write` size that triggers routing |
 | `TOKEN_SAVER_ROUTE_EDIT_CHARS` | `3000` | `Edit`/`MultiEdit` size that triggers routing |
+| `TOKEN_SAVER_BUDGET` | – | Monthly budget in dollars (overrides `/token-saver:budget`) |
+| `TOKEN_SAVER_HOME` | `~/.claude/token-saver` | Where budget config and spend history are kept |
 | `TOKEN_SAVER_SPEC_CODE_CHARS` | `600` | Max code allowed inside a delegation spec |
 | `TOKEN_SAVER_MAX_DELEGATIONS` | `4` | Coding delegations per request before batching is required |
 
@@ -231,12 +249,14 @@ plugins/token-saver/
     route-edits.mjs                 Opus → Sonnet router
     guard-delegation.mjs            spec checker: no code in specs, no tiny-task fan-out
     review-gate.mjs                 makes Opus review delegated work via git diff
+    statusline.mjs                  status line (model, cost, context, month total)
+    budget-lib.mjs                  monthly spend ledger shared by status line and hook
+    budget-watch.mjs                budget warnings at 50/80/95/100%
     model-switch.mjs                tracks /model changes
     lib.mjs                         shared helpers and thresholds
   agents/   coder.md  grunt.md  scout.md
-  commands/ handoff.md  resume.md  find.md  grunt.md  review-diff.md  router.md
-install.mjs                         installer (settings, status line, plugin)
-statusline.mjs                      status line script
+  commands/ handoff.md  resume.md  find.md  grunt.md  review-diff.md  budget.md  router.md
+install.mjs                         installer (settings, status line, budget, plugin)
 ```
 
 Check what a session cost at any time with `/cost`.

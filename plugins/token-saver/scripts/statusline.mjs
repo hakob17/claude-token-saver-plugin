@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Claude Code status line: model · session cost · context size (with warnings).
 import fs from "node:fs";
+import { readConfig, periodKey, recordSession, periodTotal, prune } from "./budget-lib.mjs";
 
 let input = {};
 try { input = JSON.parse(fs.readFileSync(0, "utf8") || "{}"); } catch {}
@@ -46,4 +47,20 @@ else if (cost >= 2) costPart = c("33", costPart);
 
 const modelPart = /opus|fable|mythos/i.test(model) ? c("35", `${model} $$$`) : model;
 
-process.stdout.write(`[${modelPart}] ${costPart} · ${ctxPart}`);
+// Monthly budget: record this session's running cost, then show the period total.
+let budgetPart = "";
+try {
+  const cfg = readConfig();
+  if (input.session_id) recordSession(input.session_id, cost, cfg);
+  if (Math.random() < 0.01) prune();
+  const month = periodTotal(periodKey(cfg.resetDay));
+  if (cfg.limit) {
+    const pct = (month / cfg.limit) * 100;
+    const txt = `month $${month.toFixed(2)}/$${cfg.limit} (${Math.round(pct)}%)`;
+    budgetPart = " · " + (pct >= 95 ? c("31", txt) : pct >= 80 ? c("33", txt) : txt);
+  } else {
+    budgetPart = ` · month $${month.toFixed(2)}`;
+  }
+} catch {}
+
+process.stdout.write(`[${modelPart}] ${costPart} · ${ctxPart}${budgetPart}`);

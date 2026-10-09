@@ -2,6 +2,7 @@
 // token-saver installer.
 //   node install.mjs              install plugin + recommended user settings
 //   node install.mjs --no-settings   plugin only, leave ~/.claude/settings.json alone
+//   node install.mjs --budget 100 [--reset-day 15]   also set a monthly budget
 //   node install.mjs --uninstall     remove plugin and restore settings backup
 import fs from "node:fs";
 import os from "node:os";
@@ -13,8 +14,12 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const claudeDir = path.join(os.homedir(), ".claude");
 const settingsFile = path.join(claudeDir, "settings.json");
 const backupFile = path.join(claudeDir, "settings.json.token-saver-backup");
-const statusDest = path.join(claudeDir, "token-saver-statusline.mjs");
-const args = new Set(process.argv.slice(2));
+const toolDir = path.join(claudeDir, "token-saver");
+const statusDest = path.join(toolDir, "statusline.mjs");
+const legacyStatus = path.join(claudeDir, "token-saver-statusline.mjs");
+const argv = process.argv.slice(2);
+const args = new Set(argv);
+const argVal = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
 
 function run(cmd) {
   try {
@@ -43,8 +48,8 @@ if (args.has("--uninstall")) {
     fs.rmSync(backupFile);
     console.log("Restored ~/.claude/settings.json from backup.");
   }
-  fs.rmSync(statusDest, { force: true });
-  console.log("token-saver removed.");
+  for (const f of [statusDest, path.join(toolDir, "budget-lib.mjs"), legacyStatus]) fs.rmSync(f, { force: true });
+  console.log("token-saver removed. Spend history and budget are kept in ~/.claude/token-saver/ (delete it to remove them).");
   process.exit(0);
 }
 
@@ -57,7 +62,10 @@ if (!args.has("--no-settings")) {
     if (!fs.existsSync(backupFile)) fs.copyFileSync(settingsFile, backupFile);
   }
 
-  fs.copyFileSync(path.join(here, "statusline.mjs"), statusDest);
+  fs.mkdirSync(toolDir, { recursive: true });
+  fs.copyFileSync(path.join(here, "plugins/token-saver/scripts/statusline.mjs"), statusDest);
+  fs.copyFileSync(path.join(here, "plugins/token-saver/scripts/budget-lib.mjs"), path.join(toolDir, "budget-lib.mjs"));
+  fs.rmSync(legacyStatus, { force: true });
 
   s.model ??= "sonnet"; // Sonnet by default; /model opus when you really need it
   s.effortLevel ??= "medium"; // less thinking spend on routine work; --effort high when needed
@@ -84,6 +92,17 @@ if (!args.has("--no-settings")) {
   console.log(`Updated ${settingsFile} (backup: ${path.basename(backupFile)})`);
 }
 
+// Monthly budget
+if (argVal("--budget")) {
+  const limit = Number(argVal("--budget"));
+  const resetDay = Number(argVal("--reset-day") || 1);
+  if (limit > 0) {
+    fs.mkdirSync(toolDir, { recursive: true });
+    fs.writeFileSync(path.join(toolDir, "budget.json"), JSON.stringify({ limit, resetDay }) + "\n");
+    console.log(`Monthly budget set: $${limit}, resets on day ${resetDay}.`);
+  }
+}
+
 // 2) Plugin
 if (hasClaude()) {
   const ok =
@@ -101,7 +120,8 @@ Done. Restart Claude Code. New commands:
   /token-saver:find      cheap Haiku codebase search
   /token-saver:grunt     cheap Haiku mechanical edits
   /token-saver:review-diff  review only the git diff
-Check spend anytime with /cost.`);
+  /token-saver:budget    set or check your monthly budget (e.g. /token-saver:budget 100)
+Check spend anytime with /cost; the status line shows this month's total.`);
 
 function printManual() {
   console.log(`
