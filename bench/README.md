@@ -52,6 +52,10 @@ Sonnet 5.5 and Opus 5.5, 3 runs per task and configuration, Claude Code 2.1.294.
 - **Quality caveat:** on the large feature, Opus with the plugin wrote fewer new tests on average (28 vs 36). All checks passed, but the "be terse" rules may trim thoroughness on big jobs.
 - **Not measured:** long multi-request sessions, where the context warnings and handoff/resume are designed to help. Each run here is a single request.
 
+## Total cost comparison
+
+Every shipped-configuration run summed, both plugins: [`results/TOTALS.md`](results/TOTALS.md). Overall **$7.56 → $6.75 (−10.7%)**; Opus −14.7%, Sonnet −1.3%. All 102 quality checks passed on both sides.
+
 ## How we got here
 
 | Round | Change | Finding |
