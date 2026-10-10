@@ -40,6 +40,15 @@ Measured with an A/B benchmark (Claude Code with vs without the plugin, same tas
 
 Opus savings come mainly from shorter output. Sonnet is already frugal, so the plugin's rules are mostly overhead there. Full results, method and caveats: [bench/README.md](bench/README.md).
 
+**Effort level** (no plugin, same 5 coding tasks, 3 runs each; [details](bench/BENCHMARKS.md#effort-levels)): the biggest single setting.
+
+| | Low | Medium (default) | High |
+|---|---|---|---|
+| Opus, all 5 tasks | $0.79 (**−26%**) | $1.07 | $1.29 (+21%) |
+| Sonnet, all 5 tasks | $0.37 (**−12%**) | $0.42 | $0.57 (+36%) |
+
+All quality checks passed at every level, but low effort wrote far fewer tests on the large feature (Opus 13 vs 31). The installer now sets low effort by default, and `/token-saver:deep` gives you high effort for a single request.
+
 **Total cost across every benchmark run** (same work with and without the plugins; `node bench/totals.mjs`):
 
 | Plugin | Model | Work | Runs per side | Total without plugin | Total with plugin | Saved | Change | Quality passed (without / with) |
@@ -90,6 +99,7 @@ Restart Claude Code after installing.
 |---|---|
 | *(none)* | Installs the plugin, the status line and the recommended settings. Backs up `~/.claude/settings.json` first. |
 | `--no-settings` | Plugin only; your settings file is left alone. |
+| `--effort medium` | Default effort to set instead of `low` (`low`, `medium`, `high`, `xhigh`). |
 | `--budget 100 [--reset-day 15]` | Also sets a monthly budget (see *Monthly budget*). |
 | `--uninstall` | Removes the plugin and status line, restores the settings backup. Spend history in `~/.claude/token-saver/` is kept. |
 
@@ -165,7 +175,7 @@ Limits: spend is recorded by the status line, so it only counts Claude Code sess
 ### 7. Recommended settings *(Option B)*
 Added to `~/.claude/settings.json` only where you haven't set your own value:
 - `"model": "sonnet"` — switch with `/model opus` when a problem really needs it
-- `"effortLevel": "medium"` — less thinking spend on routine work
+- **Effort `low`** (top-level `effortLevel` plus per-model `modelSettings`, since Opus 5.5 ignores the top-level one). The default is `medium`; low was **26% cheaper on Opus and 12% cheaper on Sonnet** with every quality check passing, but it writes fewer tests on big features. Use `/token-saver:deep <request>` to run a single request at high effort, or pick another default with `node install.mjs --effort medium`.
 - `permissions.deny` read rules for `node_modules`, `target`, `build`, `.gradle`, `dist`, minified JS and lockfiles
 
 ---
@@ -179,6 +189,7 @@ Added to `~/.claude/settings.json` only where you haven't set your own value:
 | `/token-saver:find <question>` | Codebase search on Haiku; returns `file:line` locations and a short answer. |
 | `/token-saver:grunt <change>` | Mechanical edit on Haiku (renames, boilerplate, formatting). |
 | `/token-saver:review-diff [base]` | Reviews only the git diff, not whole files; reports real issues only. |
+| `/token-saver:deep <request>` | Runs one request at **high effort**: deeper reasoning and more thorough tests, for hard bugs, design decisions and big features. The next message goes back to your normal effort. |
 | `/token-saver:budget <amount> [reset-day]\|status\|off` | Sets or shows your monthly budget; the status line tracks spend and Claude warns at 50/80/95/100%. |
 | `/token-saver:router on\|off\|status` | Toggles the experimental Opus → Sonnet router for the current project (off by default). |
 
@@ -189,8 +200,8 @@ The biggest single habit: **`/token-saver:handoff` → `/clear` → `/token-save
 | Agent | Model | Use |
 |---|---|---|
 | `token-saver:coder` | Sonnet | Implements code from a spec; runs tests quietly; short report. |
-| `token-saver:grunt` | Haiku | Mechanical, well-specified edits. |
-| `token-saver:scout` | Haiku | Read-only search; returns locations, not file contents. |
+| `token-saver:grunt` | Haiku, low effort | Mechanical, well-specified edits. |
+| `token-saver:scout` | Haiku, low effort | Read-only search; returns locations, not file contents. |
 
 ---
 

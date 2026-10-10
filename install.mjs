@@ -3,6 +3,7 @@
 //   node install.mjs              install plugin + recommended user settings
 //   node install.mjs --no-settings   plugin only, leave ~/.claude/settings.json alone
 //   node install.mjs --budget 100 [--reset-day 15]   also set a monthly budget
+//   node install.mjs --effort medium  default effort to set (low | medium | high; default: low)
 //   node install.mjs --uninstall     remove plugin and restore settings backup
 import fs from "node:fs";
 import os from "node:os";
@@ -68,7 +69,19 @@ if (!args.has("--no-settings")) {
   fs.rmSync(legacyStatus, { force: true });
 
   s.model ??= "sonnet"; // Sonnet by default; /model opus when you really need it
-  s.effortLevel ??= "medium"; // less thinking spend on routine work; --effort high when needed
+  // Effort: benchmarks showed low effort costs 26% less on Opus and 12% less on
+  // Sonnet than the default (medium), with all quality checks passing but fewer
+  // tests written on big features. Use /token-saver:deep for a high-effort pass.
+  // Opus 5.5 ignores the top-level effortLevel in user settings, so set it per model.
+  const effort = argVal("--effort") || "low";
+  if (["low", "medium", "high", "xhigh"].includes(effort)) {
+    s.effortLevel ??= effort;
+    s.modelSettings ??= {};
+    for (const id of ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]) {
+      s.modelSettings[id] ??= {};
+      s.modelSettings[id].effortLevel ??= effort;
+    }
+  }
   s.statusLine = {
     type: "command",
     command: `node "${statusDest.replace(/\\/g, "/")}"`,
@@ -121,6 +134,7 @@ Done. Restart Claude Code. New commands:
   /token-saver:grunt     cheap Haiku mechanical edits
   /token-saver:review-diff  review only the git diff
   /token-saver:budget    set or check your monthly budget (e.g. /token-saver:budget 100)
+  /token-saver:deep      run one request at high effort (hard bugs, big features)
 Check spend anytime with /cost; the status line shows this month's total.`);
 
 function printManual() {

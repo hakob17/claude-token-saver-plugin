@@ -1,6 +1,6 @@
 {
   "name": "token-saver",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "description": "Cuts Claude Code token spend: blocks wasteful reads and noisy build output, nudges compaction, adds cheap Haiku helpers and a handoff/resume flow.",
   "author": { "name": "Hakob" }
 }

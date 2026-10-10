@@ -58,6 +58,10 @@ Sonnet 5.5 and Opus 5.5, 3 runs per task and configuration, Claude Code 2.1.294.
 
 `bench/long/` runs a 19-request coding day in one continuous session: without the plugin, with it, with handoff at the plugin's 80k threshold, and with a forced handoff at 50k. Results in [`long/results/summary.md`](long/results/summary.md): Opus −11%, Sonnet +12%; contexts stayed under ~90k, so the 80k handoff rarely triggered, and a forced handoff lost history from the final changelog.
 
+## Effort levels
+
+`node bench/run.mjs --configs effort-low,effort-medium,effort-high --out bench/results/effort` runs the coding tasks at each effort level (no plugin). Results in [`results/effort/summary.md`](results/effort/summary.md): low effort −26% on Opus and −12% on Sonnet vs the default (medium), with all checks passing but fewer tests on big features; high +21–36%.
+
 ## Total cost comparison
 
 Every shipped-configuration run summed, both plugins: [`results/TOTALS.md`](results/TOTALS.md). Overall **$14.76 → $13.83 (−6.3%)**; Opus −12.8%, Sonnet +6.2%.

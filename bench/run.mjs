@@ -83,7 +83,10 @@ function runOne(job) {
       "--setting-sources", "project",
       "--max-budget-usd", String(runBudget),
     ];
-    if (job.config === "plugin") cliArgs.push("--plugin-dir", PLUGIN_DIR);
+    // Config names: baseline | plugin | effort-<level> | plugin+effort-<level>
+    if (job.config.startsWith("plugin")) cliArgs.push("--plugin-dir", PLUGIN_DIR);
+    const eff = job.config.match(/effort-(low|medium|high|xhigh|max)/);
+    if (eff) cliArgs.push("--effort", eff[1]);
 
     const started = Date.now();
     const child = spawn("claude", cliArgs, {
