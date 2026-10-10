@@ -160,7 +160,7 @@ Per task:
 
 90 runs, $13.49.
 
-- **Low effort saves the most of anything measured:** 26% on Opus and 12% on Sonnet. It does this mainly by writing less: output tokens dropped 25–40%.
+- **Low effort saves the most of anything measured:** 26% on Opus and 12% on Sonnet. It does this mainly by writing less: output tokens dropped 22–41% on Opus and 6–28% on Sonnet.
 - **Quality held on the checks, but thoroughness dropped.** On the large feature, low effort wrote 13 new tests on Opus vs 31 at medium and 36 at high. If tests matter, use `/token-saver:deep` (high effort for one request) for big features.
 - **High effort isn't free insurance:** 21–36% more, mostly from writing many more tests (Sonnet: 54 vs 21 on the large feature).
 - The plugin and low effort weren't measured together. Both work mainly by shortening output, so their savings likely overlap rather than add up.
