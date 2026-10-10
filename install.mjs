@@ -75,11 +75,16 @@ if (!args.has("--no-settings")) {
   // Opus 5.5 ignores the top-level effortLevel in user settings, so set it per model.
   const effort = argVal("--effort") || "low";
   if (["low", "medium", "high", "xhigh"].includes(effort)) {
-    s.effortLevel ??= effort;
+    // Earlier token-saver versions wrote effortLevel "medium" (a no-op default);
+    // replace that, but keep any value the user chose themselves.
+    const ours = s.effortLevel === "medium" && fs.existsSync(backupFile) && !JSON.parse(fs.readFileSync(backupFile, "utf8")).effortLevel;
+    if (ours || argVal("--effort")) s.effortLevel = effort;
+    else s.effortLevel ??= effort;
     s.modelSettings ??= {};
     for (const id of ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]) {
       s.modelSettings[id] ??= {};
-      s.modelSettings[id].effortLevel ??= effort;
+      if (argVal("--effort")) s.modelSettings[id].effortLevel = effort;
+      else s.modelSettings[id].effortLevel ??= effort;
     }
   }
   s.statusLine = {
