@@ -13,6 +13,8 @@ Most token spend isn't your prompts. It's **context**: every message resends the
 
 Using both? Install both; they don't overlap.
 
+> Looking for **quality** rather than cost on large multi-module changes? See the companion plugin [claude-focus-plugin](https://github.com/hakob17/claude-focus-plugin): it splits work into concerns with a shared contract and focused context per worker.
+
 ### Install in one minute
 
 **Claude Code**, from inside a session:
