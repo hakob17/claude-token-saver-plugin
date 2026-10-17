@@ -76,7 +76,7 @@ let done = 0;
 const PROXY = path.resolve(here, "../plugins/token-saver/proxy/router-proxy.mjs");
 
 // One routing proxy per run, on its own port, with its own ledger and log.
-async function startProxy(dir, worker) {
+async function startProxy(dir, worker, smart) {
   const port = 9100 + worker;
   const log = path.join(dir, ".proxy-log.jsonl");
   const child = spawn(process.execPath, [PROXY], {
@@ -85,7 +85,8 @@ async function startProxy(dir, worker) {
       TOKEN_SAVER_PROXY_PORT: String(port),
       TOKEN_SAVER_HOME: path.join(dir, ".ts-home"),
       TOKEN_SAVER_PROXY_LOG: log,
-      TOKEN_SAVER_PROXY_BUDGET: args["proxy-budget"] || "8",
+      // smart: per-turn complexity routing; no budget failover, so its effect is measured alone
+      ...(smart ? { TOKEN_SAVER_PROXY_POLICY: "smart", TOKEN_SAVER_PROXY_BUDGET: "100000" } : { TOKEN_SAVER_PROXY_BUDGET: args["proxy-budget"] || "8" }),
       TOKEN_SAVER_PROXY_SUBAGENTS: args["proxy-subagents"] || "claude-sonnet-5-5",
       TOKEN_SAVER_PROXY_FALLBACK: args["proxy-fallback"] || "claude-sonnet-5-5",
     },
@@ -215,7 +216,7 @@ async function runOne(job) {
 
   const extra = { CLAUDE_PLUGIN_DATA: path.join(dir, ".plugin-data"), IS_SANDBOX: "1" };
   if (job.config.includes("router")) extra.TOKEN_SAVER_ROUTER = "on";
-  const proxy = /(^|\+)proxy/.test(job.config) ? await startProxy(dir, job.worker || 0) : null;
+  const proxy = /(^|\+)(proxy|smart)/.test(job.config) ? await startProxy(dir, job.worker || 0, /(^|\+)smart/.test(job.config)) : null;
   if (proxy) extra.ANTHROPIC_BASE_URL = proxy.url;
   const env = cleanEnv(extra);
 

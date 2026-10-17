@@ -203,4 +203,26 @@ export const TASKS = {
       return { ok, detail: `acceptance ${res.passed}/${res.total}, npm test:${res.testsPass}${res.failed?.length ? " failed: " + res.failed.join("; ") : ""}` };
     },
   },
+
+  // A realistic mixed session on the same plan: the three build turns with simple questions in
+  // between, the way people actually work. Built to test routing by task complexity.
+  mixed: {
+    title: "Coffee shop website, mixed session (builds + questions)",
+    optIn: true,
+    timeoutMin: 0,
+    fixture: { empty: true, files: { "docs/PLAN.md": "fixture/webshop-PLAN.md" } },
+    get turns() {
+      const [build1, build2, build3] = TASKS.webshop.turns;
+      return [
+        build1,
+        "What does POST /api/orders return when there isn't enough stock, and where in the code is that handled?",
+        build2,
+        "How is the cart stored in the browser? Just explain, don't change anything.",
+        build3,
+        "Where is the admin password configured, and what's the default?",
+        "List the npm scripts in package.json and what each one does.",
+      ];
+    },
+    check(dir, result, job) { return TASKS.webshop.check(dir, result, job); },
+  },
 };

@@ -12,9 +12,9 @@ export const SMART = {
   simple: process.env.TOKEN_SAVER_PROXY_TIER_SIMPLE || "claude-haiku-5-5",
   standard: process.env.TOKEN_SAVER_PROXY_TIER_STANDARD || "claude-sonnet-5-5",
   maxSwitchCtx: Number(process.env.TOKEN_SAVER_PROXY_MAX_SWITCH_CTX || 40_000),
-  ctxEditAt: Number(process.env.TOKEN_SAVER_PROXY_CTX_EDIT_AT || 60_000), // est. tokens; 0 = off
+  ctxEditAt: Number(process.env.TOKEN_SAVER_PROXY_CTX_EDIT_AT || 150_000), // est. tokens; 0 = off. High on purpose: each clearing rebuilds the cache
   ctxKeep: Number(process.env.TOKEN_SAVER_PROXY_CTX_KEEP || 6), // recent tool uses kept
-  ctxClearAtLeast: Number(process.env.TOKEN_SAVER_PROXY_CTX_CLEAR_AT_LEAST || 10_000),
+  ctxClearAtLeast: Number(process.env.TOKEN_SAVER_PROXY_CTX_CLEAR_AT_LEAST || 60_000),
 };
 const RANK = { simple: 0, standard: 1, hard: 2 };
 
