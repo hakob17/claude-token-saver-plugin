@@ -49,7 +49,7 @@ http.createServer((req, res) => {
   let raw = ""; req.on("data", (c) => (raw += c)); req.on("end", () => {
     const body = JSON.parse(raw);
     seen.push({ body, beta: req.headers["anthropic-beta"] || "" });
-    if (body.context_management && process.env.REJECT_CTX) {
+    if (process.env.REJECT_CTX && body.context_management?.edits?.some((e) => e.type === "clear_tool_uses_20250919")) {
       res.writeHead(400, { "content-type": "application/json" });
       return res.end('{"type":"error","error":{"type":"invalid_request_error","message":"context_management not supported"}}');
     }
@@ -69,7 +69,8 @@ const meta = { metadata: { user_id: "user_x_account_y_session_5ma7-0001" } };
 const tools = [{ name: "Agent" }, { name: "Read" }, { name: "Bash" }];
 const opus = "claude-opus-5";
 let h = [];
-const turn = async (text) => { h = [...h, { role: "user", content: text }]; return send({ model: opus, ...meta, tools, messages: h }); };
+const CC_CM = { edits: [{ type: "clear_thinking_20251015", keep: "all" }] }; // what Claude Code sends itself
+const turn = async (text) => { h = [...h, { role: "user", content: text }]; return send({ model: opus, ...meta, tools, messages: h, context_management: CC_CM }); };
 const reply = (blocks) => { h = [...h, { role: "assistant", content: blocks }]; };
 
 // 1. a simple question opens the session: Haiku at low effort
@@ -85,12 +86,14 @@ reply([{ type: "tool_use", id: "u1", name: "Read", input: {} }]);
 
 // 3. mid-turn (tool result) keeps Opus even though the text looks simple
 h = [...h, { role: "user", content: [{ type: "tool_result", tool_use_id: "u1", content: "x".repeat(16000) }] }];
-s = await send({ model: opus, ...meta, tools, messages: h });
+s = await send({ model: opus, ...meta, tools, messages: h, context_management: CC_CM });
 assert.equal(s.body.model, opus, "mid-turn keeps the turn's model");
 reply([{ type: "text", text: "done" }]);
 
 // 4. context is now past the context-editing threshold: clearing is added, with its beta header
-assert.ok(s.body.context_management?.edits?.[0]?.type === "clear_tool_uses_20250919", "context editing added past threshold");
+const ed = s.body.context_management?.edits || [];
+assert.equal(ed[0]?.type, "clear_thinking_20251015", "Claude Code's own edit stays first");
+assert.equal(ed[1]?.type, "clear_tool_uses_20250919", "tool-result clearing appended past threshold");
 assert.ok(s.beta.includes("context-management-2025-06-27") && s.beta.includes("oauth-2025-04-20"), "beta header merged");
 
 // 5. a simple question after a big context still drops to Haiku (cheap to re-cache)
@@ -112,12 +115,12 @@ process.env.REJECT_CTX = "1";
 const before = seen.length;
 s = await turn("Add a delete button to the product card");
 assert.equal(seen.length - before, 2, "rejected once, resent without changes");
-assert.equal(seen.at(-1).body.context_management, undefined);
+assert.deepEqual(seen.at(-1).body.context_management, CC_CM, "only our edit removed, Claude Code's kept");
 assert.equal(seen.at(-1).body.model, "claude-sonnet-5-5", "the turn keeps its routed model, only context editing is dropped");
 delete process.env.REJECT_CTX;
 reply([{ type: "text", text: "ok" }]);
 s = await turn("Add an edit button to the product card");
-assert.equal(s.body.context_management, undefined, "context editing stays off after a rejection");
+assert.deepEqual(s.body.context_management, CC_CM, "tool-result clearing stays off after a rejection");
 assert.equal(s.body.model, "claude-sonnet-5-5");
 
 // 9. Sonnet/Haiku requested by the user are never rerouted

@@ -314,18 +314,28 @@ function handle(req, res) {
       else { pin.n = n; if (d.ctxEdit) pin.ctxEdit = true; } // n spots /clear and /compact
     }
     const original = raw;
-    let outBuf = raw, stripped = 0;
+    let outBuf = raw, stripped = 0, ourCtxEdit = null;
     if (d.model !== body.model || switchIndex || d.effort || d.ctxEdit) {
       stripped = stripOldThinking(body, switchIndex);
       body.model = d.model;
       if (d.model !== requested) applyQuirks(body, d.model);
       if (d.effort) body.output_config = { ...(body.output_config || {}), effort: d.effort };
-      if (d.ctxEdit && !body.context_management && !counting) body.context_management = contextEdits();
+      // Claude Code sends its own context_management (clear_thinking first); add tool-result
+      // clearing after it rather than replacing it. The API wants clear_thinking listed first.
+      if (d.ctxEdit && !counting) {
+        const cm = body.context_management || {};
+        const edits = Array.isArray(cm.edits) ? cm.edits : [];
+        if (!edits.some((e) => e?.type === "clear_tool_uses_20250919")) {
+          ourCtxEdit = contextEdits().edits[0];
+          body.context_management = { ...cm, edits: [...edits, ourCtxEdit] };
+        }
+      }
       outBuf = Buffer.from(JSON.stringify(body));
     }
-    const extraBeta = body.context_management && !JSON.parse(original.toString("utf8")).context_management ? CTX_BETA : undefined;
+    const extraBeta = ourCtxEdit ? CTX_BETA : undefined;
     const entry = { conv: key, requested, routed: d.model, reason: d.reason, stripped, path: req.url,
-      ...(d.tier && { tier: d.tier }), ...(d.cls && { signals: d.cls.signals }), ...(extraBeta && { ctxEdit: true }) };
+      ...(d.tier && { tier: d.tier }), ...(d.cls && { signals: d.cls.signals }), ...(extraBeta && { ctxEdit: true }),
+      ...(CFG.policy === "smart" && { ccContextMgmt: JSON.stringify(JSON.parse(original.toString("utf8")).context_management ?? null).slice(0, 300) }) };
     let strippedRetry = false;
     let repaired = false;
 
@@ -356,9 +366,12 @@ function handle(req, res) {
             return;
           }
           // Context editing rejected: turn it off for good and resend the same routing without it.
-          if (extraBeta && body.context_management && /context.?management|context.?edit|clear_tool_uses/i.test(error)) {
+          if (ourCtxEdit && /context.?management|context.?edit|clear_tool_uses/i.test(error)) {
             ctxEditOff = true;
-            delete body.context_management;
+            const rest = (body.context_management?.edits || []).filter((e) => e !== ourCtxEdit);
+            if (rest.length) body.context_management = { ...body.context_management, edits: rest };
+            else delete body.context_management;
+            ourCtxEdit = null;
             log({ ...entry, status: 400, note: "context editing rejected; resent without it", error });
             outBuf = Buffer.from(JSON.stringify(body));
             up = forward(req, outBuf, onRes);
