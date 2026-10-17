@@ -176,14 +176,26 @@ One full native iOS app (SwiftUI home planner, 3 user turns, Opus) per setup. Ev
 | Plugin + hook router | $43.30 | +46% |
 | Plugin + routing proxy ($8 budget, then Sonnet 5.5) | **$14.21** | **−52%** |
 
-## 7. Caveats
+## 7. Full app build: coffee shop website
+
+A coffee shop website with backend and admin panel, built from one fixed plan by every setup. All five builds passed all 37 acceptance checks. Details: **[BENCHMARKS-WEBSHOP.md](BENCHMARKS-WEBSHOP.md)**.
+
+| Setup | Cost | vs no plugin |
+|---|---|---|
+| No plugin | $8.48 | — |
+| Plugin (router off, default) | $10.85 | +28% |
+| Plugin + hook router | $14.87 | +75% |
+| Plugin + routing proxy ($8 budget, never crossed mid-build) | $8.16 | −4% |
+| Plugin + routing proxy + low effort | **$6.61** | **−22%** |
+
+## 8. Caveats
 
 - These are synthetic projects and documents, a single user, and 3 runs per cell. Differences of ±10% on tasks costing $0.03–0.10 are within run-to-run noise.
 - The desktop plugin was measured in Claude Code, not in the desktop app itself.
 - Long sessions were measured with 19 requests (Opus: 2 runs per setup). Even longer days, sessions spanning breaks (cache expiry), and auto-compaction weren't measured.
 - The "be terse" rules may trim thoroughness on big jobs. On the large feature, Opus with the plugin wrote fewer new tests on average (28 vs 36), though all checks passed.
 
-## 8. Reproduce
+## 9. Reproduce
 
 ```bash
 node bench/run.mjs --models sonnet,opus --runs 3 --budget 15     # Claude Code plugin
@@ -191,6 +203,7 @@ node bench/desktop/run.mjs --models sonnet,opus --runs 3 --budget 15   # desktop
 node bench/long/run.mjs --models sonnet,opus --runs 3 --budget 20      # long sessions
 node bench/run.mjs --configs effort-low,effort-medium,effort-high --out bench/results/effort --budget 15   # effort levels
 sh bench/run-router-2026-10.sh                                     # router setups, full iOS app (needs Xcode)
+sh bench/run-webshop-2026-10.sh                                    # router setups, coffee shop website
 node bench/all.mjs                                                 # rebuild this file
 ```
 

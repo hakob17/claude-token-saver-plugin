@@ -203,6 +203,10 @@ async function runOne(job) {
     if (task.fixture.empty) {
       fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(path.join(dir, "README.md"), "# New project\n");
+      for (const [rel, src] of Object.entries(task.fixture.files || {})) { // e.g. a fixed plan every variant gets
+        fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+        fs.copyFileSync(path.resolve(here, src), path.join(dir, rel));
+      }
     } else buildFixture(dir, task.fixture);
     execSync(`git init -q && git add -A && git -c user.name=bench -c user.email=bench@example.com commit -qm fixture`, { cwd: dir });
     prog = { turn: 0, sessionId: null, interrupted: false };
@@ -230,6 +234,14 @@ async function runOne(job) {
     cost += last.total_cost_usd || 0; turns += last.num_turns || 0;
     add(usage, last.usage);
     for (const [m, u] of Object.entries(last.modelUsage || {})) modelUsage[m] = add(modelUsage[m], u);
+    // A plan's usage limit comes back as a normal "success" whose text is the limit notice.
+    // Stop everything: retrying only burns attempts, and the build can resume later in place.
+    if (/hit your (session |usage )?limit|usage limit (reached|exceeded)/i.test(String(last.result || ""))) {
+      prog.interrupted = true; saveProg();
+      if (proxy) proxy.stop();
+      if (!stopped) { stopped = true; console.log(`Usage limit reached during ${id}; stopping. Resume later with --resume-root ${workRoot}`); }
+      return null;
+    }
     const ok = !last.is_error && last.subtype === "success";
     if (ok) { prog.turn++; prog.interrupted = false; continuations = 0; }
     else if (++continuations > 3) { saveProg(); break; }

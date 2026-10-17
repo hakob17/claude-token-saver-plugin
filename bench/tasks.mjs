@@ -174,4 +174,33 @@ export const TASKS = {
       return { ok, detail: `build+test:${ios.ok} test files:${testFiles} swift lines:${swiftLines}${missing.length ? " missing:" + missing.join(",") : ""}` };
     },
   },
+
+  // Greenfield web app built from one fixed plan (bench/fixture/webshop-PLAN.md), so every variant
+  // builds the same thing. Graded by a black-box acceptance test the builds never see.
+  webshop: {
+    title: "Coffee shop website + backend + admin from a fixed plan",
+    optIn: true,
+    timeoutMin: 0,
+    fixture: { empty: true, files: { "docs/PLAN.md": "fixture/webshop-PLAN.md" } },
+    turns: [
+      (job) =>
+        "docs/PLAN.md is the full product plan for this repo. Start with the backend: Node.js project, data storage with seed data, " +
+        "and the public API (products, guides, orders) exactly as in the API contract, with automated tests. `npm test` must pass.\n" +
+        `Another build shares this machine: when you run the server yourself, use PORT=${4100 + (job?.worker || 0) * 10} (and nearby ports for tests), never 3000.`,
+      "Next, build the landing page (`/` and `/guides/:slug`) and the shop (`/shop`: catalogue with roast filter, product detail, " +
+        "cart, checkout) as described in docs/PLAN.md, using the API. Keep `npm test` passing.",
+      "Finally, build the admin panel (`/admin`) and the admin API from docs/PLAN.md. Then go through docs/PLAN.md and make sure " +
+        "every part is implemented, `npm install && npm start` works with PORT, DATA_DIR and ADMIN_PASSWORD, and `npm test` passes. " +
+        "Add a README with how to run it.",
+    ],
+    check(dir) {
+      let res = {};
+      try {
+        res = JSON.parse(execSync(`node "${new URL("./webshop-check.mjs", import.meta.url).pathname}" "${dir}"`,
+          { encoding: "utf8", timeout: 15 * 60_000, stdio: ["ignore", "pipe", "ignore"] }).trim().split("\n").pop());
+      } catch (e) { res = { passed: 0, total: 37, failed: ["checker crashed"], testsPass: false }; }
+      const ok = res.testsPass && res.total > 0 && res.passed === res.total;
+      return { ok, detail: `acceptance ${res.passed}/${res.total}, npm test:${res.testsPass}${res.failed?.length ? " failed: " + res.failed.join("; ") : ""}` };
+    },
+  },
 };
