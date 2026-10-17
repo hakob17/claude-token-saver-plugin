@@ -1,6 +1,6 @@
 # Routing proxy: design note and benchmark plan *(experimental)*
 
-Status: prototype. Offline smoke test passes (13 scenarios); live routing verified on a Max subscription; benchmarked on one full iOS app build (see [BENCHMARKS.md](BENCHMARKS.md) section 6): **$14.21 vs $29.63 without the plugin (−52%)**, with every quality check passing. One run, so treat the size of the saving as an estimate.
+Status: prototype. Offline smoke test passes (13 scenarios); live routing verified on a Max subscription; benchmarked on one full iOS app build (see [BENCHMARKS-IOS.md](BENCHMARKS-IOS.md)): **$14.21 vs $29.63 without the plugin (−52%)**, with every quality check passing. One run, so treat the size of the saving as an estimate.
 
 ## Why a proxy
 

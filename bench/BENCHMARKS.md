@@ -167,29 +167,14 @@ Per task:
 
 ## 6. Full app build: router setups
 
-Does routing Opus work to cheaper models pay off on a whole project? One full native iOS app per setup: no plugin, the plugin as shipped, the plugin with the hook router (`TOKEN_SAVER_ROUTER=on`), and the plugin behind the experimental routing proxy (subagents to Sonnet 5.5, main thread fails over to Sonnet 5.5 once $8 is spent, at a turn boundary). See [ROUTING-PROXY.md](ROUTING-PROXY.md) for the proxy design.
+One full native iOS app (SwiftUI home planner, 3 user turns, Opus) per setup. Every build passed its build, test and install checks. Details, routing logs and caveats: **[BENCHMARKS-IOS.md](BENCHMARKS-IOS.md)**.
 
-Task: build a native iOS (SwiftUI) home planner from an empty repo in 3 user turns of one session: (1) drawing canvas, geometry and plan JSON, (2) furniture and garden catalogue, (3) an AI assistant calling the Anthropic API, then ready to install. Main model Opus (`claude-opus-5`), 1 run per setup, Claude Code 2.1.228, Xcode 27. A run passes when `xcodebuild test` passes, the app installs and launches on the iOS 27 simulator, and the canvas, garden, catalogue and LLM-client code is present with no real API key committed.
-
-| Setup | Quality | Cost (API-equivalent) | vs no plugin | Turns | Swift lines | Test files | Opus share of cost |
-|---|---|---|---|---|---|---|---|
-| No plugin | ✅ | **$29.63** | — | 138 | 6676 | 7 | 100% |
-| Plugin (router off, default) | ✅ | **$27.37** | −8% | 123 | 7396 | 6 | 100% |
-| Plugin + hook router | ✅ | **$43.30** | +46% | 100 | 8392 | 11 | 100% |
-| Plugin + routing proxy | ✅ | **$14.21** | −52% | 106 | 6889 | 8 | 72% |
-| Plugin + routing proxy, v1 (conversation-tracking bug) | ✅ | **$31.51** | +6% | 209 | 9436 | 15 | 98% |
-
-Routing proxy details: 28 of 103 requests went to Sonnet 5.5, 17 were held on Opus mid-turn, 1 switch at a turn boundary, 0 fail-open retries. Claude Code reported $20.20 (priced as Opus); the true cost from the proxy log is $14.21.
-
-The v1 run (before the fix) switched once, then lost track of the conversation and went back to Opus: 4 of 198 requests on Sonnet, $31.51 in total.
-
-- **Every setup produced a working app**, so cost is the difference. With one run per setup, treat differences under about 15% as noise.
-- **The plugin as shipped saved 8%** without any routing, in line with the smaller Opus tasks above.
-- **The hook router cost 46% more than no plugin** (+58% vs. the plugin alone), the same direction as the earlier +31%: it blocks large writes only after Opus has generated them, then pays again for delegation. It did write more code and tests. It stays off by default.
-- **The routing proxy was the cheapest setup: 52% less than no plugin** (48% less than the plugin alone), and the app passed every check. Turns 1–2 ran on Opus; spend passed the $8 budget during turn 2, so the proxy held Opus to the end of that turn (17 requests, keeping the prompt cache), then switched to Sonnet 5.5 at the turn-3 boundary and stayed there (28 requests, $3.99). Part of the saving is that this build did less work (106 turns, 8 test files vs 138 and 7 without the plugin); one run per setup, so the exact percentage is soft.
-- **The first proxy run (v1) found a bug:** it keyed conversations by a hash of the opening message, which Claude Code rewrites mid-session, so after switching to Sonnet it lost track, went back to Opus with a 365k-token cache write, and cost $31.51. Keying the main thread by session id fixed it; the smoke test now replays that case.
-- **Claude Code's own cost report is wrong under the proxy:** it said $20.20 because it prices every request as the model it asked for (Opus). The true cost from the proxy log is $14.21.
-- Wall-clock times aren't reported: the first two builds were slowed by an xcodebuild hang (fixed with `-collect-test-diagnostics never`) and an Xcode auto-update mid-run.
+| Setup | Cost | vs no plugin |
+|---|---|---|
+| No plugin | $29.63 | — |
+| Plugin (router off, default) | $27.37 | −8% |
+| Plugin + hook router | $43.30 | +46% |
+| Plugin + routing proxy ($8 budget, then Sonnet 5.5) | **$14.21** | **−52%** |
 
 ## 7. Caveats
 

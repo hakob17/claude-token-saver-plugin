@@ -156,7 +156,7 @@ When enabled (`/token-saver:router on`, or `TOKEN_SAVER_ROUTER=on`) and the sess
 
 ### 5a. Routing proxy *(experimental)*
 
-The alternative to the hook router: a local gateway that chooses the model **per request, before generation**, so Opus never pays for code it isn't allowed to write. Design and benchmark plan: [bench/ROUTING-PROXY.md](bench/ROUTING-PROXY.md). On one full native iOS app build it cost **$14.21 vs $29.63 without the plugin (−52%)**, with every quality check passing (one run; [BENCHMARKS.md](bench/BENCHMARKS.md) section 6).
+The alternative to the hook router: a local gateway that chooses the model **per request, before generation**, so Opus never pays for code it isn't allowed to write. Design and benchmark plan: [bench/ROUTING-PROXY.md](bench/ROUTING-PROXY.md). On one full native iOS app build it cost **$14.21 vs $29.63 without the plugin (−52%)**, with every quality check passing (one run; [BENCHMARKS-IOS.md](bench/BENCHMARKS-IOS.md)).
 
 ```bash
 node plugins/token-saver/proxy/router-proxy.mjs            # listens on 127.0.0.1:8787
