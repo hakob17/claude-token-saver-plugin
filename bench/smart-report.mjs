@@ -47,3 +47,33 @@ console.log(`Per-turn routing of the smart router ("cache rebuild" = a request t
 |---|---|---|
 ${names.map((n, i) => `| ${i + 1}. ${n} | ${cell(a[i])} | ${cell(b[i])} |`).join("\n")}
 `);
+
+// 3 rounds with the fixed defaults (tool-result clearing off, escalation fix).
+const x3 = load("bench/results/mixed-2026-10-x3/runs.jsonl");
+if (x3.length) {
+  const by = (c) => x3.filter((r) => r.config === c).sort((p, q) => p.rep - q.rep);
+  const base = by("baseline"), smart = by("plugin+smart");
+  const mean = (rs) => rs.reduce((s, r) => s + r.true_cost_usd, 0) / rs.length;
+  const range = (rs) => `$${Math.min(...rs.map((r) => r.true_cost_usd)).toFixed(2)}–$${Math.max(...rs.map((r) => r.true_cost_usd)).toFixed(2)}`;
+  const passed = (rs) => `${rs.filter((r) => r.quality_ok).length}/${rs.length}`;
+  const mb = mean(base), ms = mean(smart);
+  const mix = (r) => Object.entries(r.proxy?.by_model || {}).map(([m, v]) => `${m.replace("claude-", "")} ${v.requests}`).join(", ");
+  console.log(`### 3 rounds with the fixed defaults
+
+Tool-result clearing off, plain questions no longer escalated. Same task and grading, 3 runs per setup, run 2 at a time.
+
+| Round | No plugin | Plugin + smart router | Smart-router requests by model |
+|---|---|---|---|
+${base.map((b, i) => `| ${i + 1} | $${b.true_cost_usd.toFixed(2)} (${b.turns} turns) ${b.quality_ok ? "✅" : "❌"} | $${smart[i]?.true_cost_usd.toFixed(2)} (${smart[i]?.turns} turns) ${smart[i]?.quality_ok ? "✅" : "❌"} | ${smart[i] ? mix(smart[i]) : "—"} |`).join("\n")}
+| **Mean** | **$${mb.toFixed(2)}** | **$${ms.toFixed(2)}** (−${Math.round((1 - ms / mb) * 100)}%) | |
+| Range | ${range(base)} | ${range(smart)} | |
+| Passed 37/37 | ${passed(base)} | ${passed(smart)} | |
+`);
+  const rounds = smart.map((r) => perTurn(`bench/results/mixed-2026-10-x3/plugin+smart-r${r.rep}-proxy-log.jsonl`));
+  console.log(`Per-turn routing of the smart router in the 3 rounds:
+
+| Turn | Round 1 | Round 2 | Round 3 |
+|---|---|---|---|
+${names.map((n, i) => `| ${i + 1}. ${n} | ${rounds.map((t) => cell(t[i])).join(" | ")} |`).join("\n")}
+`);
+}

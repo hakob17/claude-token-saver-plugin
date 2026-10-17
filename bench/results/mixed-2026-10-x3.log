@@ -1,0 +1,28 @@
+Benchmark: 6 runs (opus × mixed × baseline,plugin+smart × 3), parallel 2, budget $400
+Work dir: /var/folders/qt/3x2b19kd30b4rtg5yq6_7v140000gn/T/ts-bench-tREws4
+Results: /Users/Hakob_Hakobyan1/CascadeProjects/llm-features/claude-token-saver-plugin/bench/results/mixed-2026-10-x3/runs.jsonl
+
+[1/6] opus-mixed-plugin+smart-r1               $  6.648 (CC says $10.07)  turns  70  PASS  acceptance 37/37, npm test:true   (total $6.65)
+[2/6] opus-mixed-baseline-r1                   $ 14.709  turns 104  PASS  acceptance 37/37, npm test:true   (total $21.36)
+[3/6] opus-mixed-plugin+smart-r2               $  6.247 (CC says $10.25)  turns  62  PASS  acceptance 37/37, npm test:true   (total $27.60)
+[4/6] opus-mixed-baseline-r2                   $ 13.205  turns  90  PASS  acceptance 37/37, npm test:true   (total $40.81)
+[5/6] opus-mixed-plugin+smart-r3               $  5.583 (CC says $9.40)  turns  58  PASS  acceptance 37/37, npm test:true   (total $46.39)
+[6/6] opus-mixed-baseline-r3                   $  8.217  turns  74  PASS  acceptance 37/37, npm test:true   (total $54.61)
+
+# token-saver benchmark results
+
+Runs: 6. Each run = fresh copy of the sample project, `claude -p` headless, then an automatic quality check.
+Savings compare mean cost per task (baseline → plugin). Quality = runs passing the task's check.
+
+| Model | Task | Runs (base/plugin) | Mean cost base | Mean cost plugin | Saving | Median saving | Input tokens base → plugin | Output tokens base → plugin | Turns base → plugin | Quality base | Quality plugin |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| opus | Coffee shop website, mixed session (builds + questions) | 3/0 | $12.044 | – | **–** | – | 9900k → NaNk | 139.7k → NaNk | 89.3 → NaN | 3/3 | 0/0 |
+
+## Overall (mean of per-task means)
+
+| Model | Cost per task base | Cost per task plugin | Saving | Quality base | Quality plugin |
+|---|---|---|---|---|---|
+| opus | $12.044 | – | **–** | 3/3 | 0/0 |
+
+_Negative saving (+%) means the plugin cost more on that task._
+

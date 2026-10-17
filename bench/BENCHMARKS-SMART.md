@@ -23,7 +23,40 @@ Per-turn routing of the smart router ("cache rebuild" = a request that rewrote m
 | 6. Question: admin password | haiku-5-5, 1 req, $0.02, 1 cache rebuild | opus-5, 1 req, $1.07, 1 cache rebuild |
 | 7. Question: npm scripts | haiku-5-5, 2 req, $0.00 | haiku-5-5, 2 req, $0.02, 1 cache rebuild |
 
+### 3 rounds with the fixed defaults
+
+Tool-result clearing off, plain questions no longer escalated. Same task and grading, 3 runs per setup, run 2 at a time.
+
+| Round | No plugin | Plugin + smart router | Smart-router requests by model |
+|---|---|---|---|
+| 1 | $14.71 (104 turns) ✅ | $6.65 (70 turns) ✅ | haiku-5-5 7, opus-5 39, sonnet-5-5 19 |
+| 2 | $13.21 (90 turns) ✅ | $6.25 (62 turns) ✅ | haiku-5-5 5, opus-5 36, sonnet-5-5 21 |
+| 3 | $8.22 (74 turns) ✅ | $5.58 (58 turns) ✅ | haiku-5-5 6, opus-5 38, sonnet-5-5 12 |
+| **Mean** | **$12.04** | **$6.16** (−49%) | |
+| Range | $8.22–$14.71 | $5.58–$6.65 | |
+| Passed 37/37 | 3/3 | 3/3 | |
+
+Per-turn routing of the smart router in the 3 rounds:
+
+| Turn | Round 1 | Round 2 | Round 3 |
+|---|---|---|---|
+| 1. Build backend + public API | opus-5, 21 req, $2.08 | opus-5, 22 req, $1.89 | opus-5, 20 req, $1.75 |
+| 2. Question: orders when out of stock | haiku-5-5, 1 req, $0.01, 1 cache rebuild | haiku-5-5, 1 req, $0.01, 1 cache rebuild | haiku-5-5, 1 req, $0.01, 1 cache rebuild |
+| 3. Build landing page + shop | sonnet-5-5, 19 req, $1.15, 1 cache rebuild | sonnet-5-5, 20 req, $1.17, 1 cache rebuild | sonnet-5-5, 12 req, $0.78, 1 cache rebuild |
+| 4. Question: cart storage | haiku-5-5, 1 req, $0.02, 1 cache rebuild | sonnet-5-5, 1 req, $0.34, 1 cache rebuild | haiku-5-5, 1 req, $0.01, 1 cache rebuild |
+| 5. Build admin panel + final pass | opus-5, 18 req, $3.38, 1 cache rebuild | opus-5, 14 req, $2.81, 1 cache rebuild | opus-5, 18 req, $3.00, 1 cache rebuild |
+| 6. Question: admin password | haiku-5-5, 2 req, $0.00 | haiku-5-5, 1 req, $0.02, 1 cache rebuild | haiku-5-5, 1 req, $0.02, 1 cache rebuild |
+| 7. Question: npm scripts | haiku-5-5, 2 req, $0.00 | haiku-5-5, 2 req, $0.00 | haiku-5-5, 2 req, $0.00 |
+
 ## What it shows
+
+**With the fixed defaults, over 3 rounds: the smart router averaged $6.16 against $12.04 without the plugin (−49%), and all 6 builds passed 37/37.** It was also far more stable ($5.58–6.65 vs $8.22–14.71) and needed fewer turns (58–70 vs 74–104).
+
+- **Where the savings come from:** questions on Haiku cost about 1–2 cents each; the shop build on Sonnet cost $0.78–1.17; the two big builds stay on Opus. Each return to Opus rebuilds its cache once (visible as "1 cache rebuild" per turn), which the cheaper turns more than pay for.
+- **One misroute left:** in round 2 the question "How is the cart stored? Just explain, don't change anything." was sent to Sonnet ($0.34), because "change" counts as an edit word and the previous turn had 4 failing tool calls. Negations like "don't change" aren't recognised yet.
+- **The no-plugin runs vary a lot on their own** (74–104 turns), so single-run comparisons, including the earlier ones below, are noisy.
+
+### Earlier single runs (before the fixes)
 
 - **Every build passed all 37 checks**, including both smart-router runs. Routing questions to Haiku and the shop build to Sonnet didn't hurt quality.
 - **Routing by complexity works where it's meant to:** each question cost $0.00–0.02 on Haiku instead of the usual $0.10–0.40 on Opus, and the medium build turn cost about $1 on Sonnet.
@@ -31,12 +64,13 @@ Per-turn routing of the smart router ("cache rebuild" = a request that rewrote m
   - **Switching back to Opus** for the next big build rebuilds its cache, about $0.4–0.9 once per return.
   - **Tool-result clearing** rebuilt the cache each time it fired inside an Opus turn: run 1 (trigger 60k) did it 3 times in the admin turn, about $2.8; run 2 (trigger 150k) about $1.1. Within a turn it cost more than it saved, so **it's now off by default** (`TOKEN_SAVER_PROXY_CTX_EDIT_AT` turns it on for very long sessions).
 - **Run 2 also exposed an escalation misfire:** after a build turn with failing tool calls, two plain questions were escalated (to Sonnet, then to Opus because the context was too large to drop down), costing about $1.4. **Fixed:** plain questions are no longer escalated unless they ask about the failure.
-- **Run-to-run variance dominates single runs:** the same admin turn took 15 requests in run 1 and 48 in run 2. The −8% and +25% are both within that spread. A trustworthy number needs 3+ runs per setup with the fixed defaults.
+- **Run-to-run variance dominates single runs:** the same admin turn took 15 requests in run 1 and 48 in run 2. That's why the 3-round comparison above was run.
 
 ## Reproduce
 
 ```bash
 sh bench/run-mixed-2026-10.sh   # no plugin, plugin, plugin + smart router; bills the signed-in claude CLI
 sh bench/run-mixed-tuned.sh     # smart router again (run 2)
+sh bench/run-mixed-x3.sh        # 3 rounds of no plugin vs smart router, fixed defaults
 node bench/all.mjs              # rebuild this file and BENCHMARKS.md
 ```

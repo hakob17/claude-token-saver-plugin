@@ -201,7 +201,14 @@ The coffee shop plan as one session with 4 simple questions between the builds, 
 | Plugin + smart router, run 1 | $8.59 | −8% |
 | Plugin + smart router, run 2 | $11.73 | +25% |
 
-Questions on Haiku cost 1–2 cents each, but returning to Opus and tool-result clearing rebuilt the cache, and run 2 hit an escalation misfire and a much longer admin turn. Clearing is now off by default and the misfire is fixed; single runs vary too much to call the effect yet.
+Those single runs were noisy, and run 2 hit an escalation misfire and costly tool-result clearing. After fixing both (clearing off by default), **3 rounds per setup**:
+
+| Setup (3 rounds) | Mean cost | Range | vs no plugin | Passed 37/37 |
+|---|---|---|---|---|
+| No plugin | $12.04 | $8.22–14.71 | — | 3/3 |
+| **Plugin + smart router** | **$6.16** | $5.58–6.65 | **−49%** | 3/3 |
+
+Questions went to Haiku (1–2 cents each), the shop build to Sonnet, and the big builds stayed on Opus.
 
 ## 9. Caveats
 
