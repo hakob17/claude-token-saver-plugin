@@ -1,0 +1,23 @@
+Benchmark: 1 runs (opus × mixed × plugin+smart × 1), parallel 1, budget $400
+Work dir: /var/folders/qt/3x2b19kd30b4rtg5yq6_7v140000gn/T/ts-bench-515oYz
+Results: /Users/Hakob_Hakobyan1/CascadeProjects/llm-features/claude-token-saver-plugin/bench/results/mixed-2026-10-tuned/runs.jsonl
+
+[1/1] opus-mixed-plugin+smart-r1               $ 11.732 (CC says $14.92)  turns  94  PASS  acceptance 37/37, npm test:true   (total $11.73)
+
+# token-saver benchmark results
+
+Runs: 1. Each run = fresh copy of the sample project, `claude -p` headless, then an automatic quality check.
+Savings compare mean cost per task (baseline → plugin). Quality = runs passing the task's check.
+
+| Model | Task | Runs (base/plugin) | Mean cost base | Mean cost plugin | Saving | Median saving | Input tokens base → plugin | Output tokens base → plugin | Turns base → plugin | Quality base | Quality plugin |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| opus | Coffee shop website, mixed session (builds + questions) | 0/0 | – | – | **–** | – | NaNk → NaNk | NaNk → NaNk | NaN → NaN | 0/0 | 0/0 |
+
+## Overall (mean of per-task means)
+
+| Model | Cost per task base | Cost per task plugin | Saving | Quality base | Quality plugin |
+|---|---|---|---|---|---|
+| opus | – | – | **–** | 0/0 | 0/0 |
+
+_Negative saving (+%) means the plugin cost more on that task._
+

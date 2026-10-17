@@ -28,7 +28,7 @@ The classifier reads the user's own words (injected `<system-reminder>` text and
 | Long message or pasted spec (> 1,500 characters) | +2 |
 | 3 or more files named | +2 |
 | First turn of a new project with a real brief (> 400 characters) | +1 |
-| The previous turn had 3+ failing tool calls or failing tests | escalate one tier |
+| The previous turn had 3+ failing tool calls or failing tests | escalate one tier (not for a plain question unless it asks about the failure) |
 
 File names are removed before matching words, so `docs/PLAN.md` doesn't count as "plan".
 
@@ -51,19 +51,19 @@ Every decision is logged with its tier, score and signals (`~/.claude/token-save
 
 ## 2. Context management
 
-Long sessions pay twice for stale context: input tokens on every request, and a model whose attention is spread over file contents read 50 steps ago. Once a conversation passes about 60k tokens (`TOKEN_SAVER_PROXY_CTX_EDIT_AT`), the proxy adds the API's server-side tool-result clearing to every request in that conversation:
+Long sessions pay twice for stale context: input tokens on every request, and a model whose attention is spread over file contents read 50 steps ago. **Off by default** (see the benchmark: each clearing rebuilt the cache and cost more than it saved within a turn). With `TOKEN_SAVER_PROXY_CTX_EDIT_AT=150000`, once a conversation passes that size the proxy adds the API's server-side tool-result clearing to every request in that conversation:
 
 ```json
 { "type": "clear_tool_uses_20250919",
-  "trigger": { "type": "input_tokens", "value": 60000 },
+  "trigger": { "type": "input_tokens", "value": 150000 },
   "keep": { "type": "tool_uses", "value": 6 },
-  "clear_at_least": { "type": "input_tokens", "value": 10000 } }
+  "clear_at_least": { "type": "input_tokens", "value": 60000 } }
 ```
 
 How it behaves:
 
 - **The newest tool results stay.** The 6 most recent tool uses are always kept; older results are removed on the server.
-- **Clearing is batched.** It only runs when it saves at least 10k tokens, so the cache isn't rebuilt for a small gain.
+- **Clearing is batched.** It only runs when it saves at least 60k tokens, so the cache isn't rebuilt for a small gain.
 - **Claude Code's history isn't touched.** Its own copy of the conversation stays complete.
 - **Claude Code's own settings are kept.** Claude Code already sends its own `context_management` (thinking settings, listed first). The proxy appends its edit after Claude Code's and adds the `context-management-2025-06-27` beta flag to the header.
 - **It turns itself off if refused.** If the API rejects the edit, the proxy removes only its own entry, resends, and stops adding it.

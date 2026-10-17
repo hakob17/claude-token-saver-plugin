@@ -190,14 +190,27 @@ A coffee shop website with backend and admin panel, built from one fixed plan by
 | Plugin + routing proxy ($3 budget, switched at turn 3) | $8.20 | −3% |
 | Plugin + routing proxy + low effort ($3 budget, never switched) | **$4.14** | **−51%** |
 
-## 8. Caveats
+## 8. Smart router: mixed session
+
+The coffee shop plan as one session with 4 simple questions between the builds, to test routing each turn by complexity (Haiku for questions, Sonnet for medium builds, Opus for big ones). Every build passed all 37 checks. Details and the per-turn routing: **[BENCHMARKS-SMART.md](BENCHMARKS-SMART.md)**.
+
+| Setup | Cost | vs no plugin |
+|---|---|---|
+| No plugin | $9.36 | — |
+| Plugin | $10.07 | +8% |
+| Plugin + smart router, run 1 | $8.59 | −8% |
+| Plugin + smart router, run 2 | $11.73 | +25% |
+
+Questions on Haiku cost 1–2 cents each, but returning to Opus and tool-result clearing rebuilt the cache, and run 2 hit an escalation misfire and a much longer admin turn. Clearing is now off by default and the misfire is fixed; single runs vary too much to call the effect yet.
+
+## 9. Caveats
 
 - These are synthetic projects and documents, a single user, and 3 runs per cell. Differences of ±10% on tasks costing $0.03–0.10 are within run-to-run noise.
 - The desktop plugin was measured in Claude Code, not in the desktop app itself.
 - Long sessions were measured with 19 requests (Opus: 2 runs per setup). Even longer days, sessions spanning breaks (cache expiry), and auto-compaction weren't measured.
 - The "be terse" rules may trim thoroughness on big jobs. On the large feature, Opus with the plugin wrote fewer new tests on average (28 vs 36), though all checks passed.
 
-## 9. Reproduce
+## 10. Reproduce
 
 ```bash
 node bench/run.mjs --models sonnet,opus --runs 3 --budget 15     # Claude Code plugin

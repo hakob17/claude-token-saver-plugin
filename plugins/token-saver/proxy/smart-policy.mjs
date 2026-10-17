@@ -12,7 +12,9 @@ export const SMART = {
   simple: process.env.TOKEN_SAVER_PROXY_TIER_SIMPLE || "claude-haiku-5-5",
   standard: process.env.TOKEN_SAVER_PROXY_TIER_STANDARD || "claude-sonnet-5-5",
   maxSwitchCtx: Number(process.env.TOKEN_SAVER_PROXY_MAX_SWITCH_CTX || 40_000),
-  ctxEditAt: Number(process.env.TOKEN_SAVER_PROXY_CTX_EDIT_AT || 150_000), // est. tokens; 0 = off. High on purpose: each clearing rebuilds the cache
+  // Tool-result clearing: off by default. In the benchmarks each clearing rebuilt the cache and cost
+  // more than it saved within a turn; turn it on (e.g. 150000) for very long sessions.
+  ctxEditAt: Number(process.env.TOKEN_SAVER_PROXY_CTX_EDIT_AT || 0), // est. tokens; 0 = off
   ctxKeep: Number(process.env.TOKEN_SAVER_PROXY_CTX_KEEP || 6), // recent tool uses kept
   ctxClearAtLeast: Number(process.env.TOKEN_SAVER_PROXY_CTX_CLEAR_AT_LEAST || 60_000),
 };
@@ -76,7 +78,11 @@ export function classifyTurn(body) {
   if (firstTurn && len > 400) add(1, "first turn of a project");
 
   let tier = score <= -1 ? "simple" : score >= 4 ? "hard" : "standard";
-  if (trouble >= 3 && tier !== "hard") { tier = tier === "simple" ? "standard" : "hard"; signals.push(`escalate: ${trouble} failing tool calls last turn`); }
+  // Escalate after a troubled turn, but not for a plain question that isn't about the trouble
+  // ("where is the password configured?" doesn't get harder because tests failed earlier).
+  const pureQuestion = question && !edits && !hard;
+  const aboutTrouble = /\b(fail\w*|error\w*|bug\w*|broken|crash\w*|wrong|not working|doesn'?t work)\b/i.test(words);
+  if (trouble >= 3 && tier !== "hard" && (!pureQuestion || aboutTrouble)) { tier = tier === "simple" ? "standard" : "hard"; signals.push(`escalate: ${trouble} failing tool calls last turn`); }
   return { tier, score, signals };
 }
 

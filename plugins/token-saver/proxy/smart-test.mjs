@@ -42,6 +42,8 @@ for (let i = 0; i < 3; i++) failing.push(
   { role: "user", content: [{ type: "tool_result", tool_use_id: `t${i}`, is_error: true, content: "Error: boom" }] });
 failing.push({ role: "assistant", content: [{ type: "text", text: "still failing" }] });
 assert.equal(classifyTurn(msg("why does it fail?", failing)).tier, "standard", "repeated failures escalate a simple turn");
+assert.equal(classifyTurn(msg("where is the admin password configured?", failing)).tier, "simple", "a plain question isn't escalated by earlier failures");
+assert.equal(classifyTurn(msg("Add a rename button to the product card", failing)).tier, "hard", "a work turn after failures escalates");
 
 // ---- proxy end to end ----
 const seen = [];
