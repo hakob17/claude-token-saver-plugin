@@ -23,11 +23,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DIR, readConfig, periodTotal } from "../scripts/budget-lib.mjs";
+import { decideSmart, contextEdits, CTX_BETA } from "./smart-policy.mjs";
 
 const env = process.env;
 export const CFG = {
   port: Number(env.TOKEN_SAVER_PROXY_PORT || 8787),
   upstream: env.TOKEN_SAVER_PROXY_UPSTREAM || "https://api.anthropic.com",
+  // "budget" (default): failover only. "smart": per-turn routing by task complexity + context management.
+  policy: env.TOKEN_SAVER_PROXY_POLICY || "budget",
   fallback: env.TOKEN_SAVER_PROXY_FALLBACK || "claude-sonnet-5-5",
   threshold: Number(env.TOKEN_SAVER_PROXY_THRESHOLD || 1.0), // fraction of the budget
   hard: Number(env.TOKEN_SAVER_PROXY_HARD || 1.1), // past this, switch at the next turn regardless of context size
@@ -158,6 +161,7 @@ export function stripOldThinking(body, switchIndex) {
 }
 
 // ---------- state ----------
+let ctxEditOff = false; // set if the API rejects context editing for this account
 const rejected = new Set(); // "model|anthropic-beta" combos the API refused once
 const pins = new Map(); // convKey -> { model, switchIndex, at }
 function setPin(key, value) {
@@ -200,10 +204,12 @@ const upstreamUrl = new URL(CFG.upstream);
 const lib = upstreamUrl.protocol === "http:" ? http : https;
 const agent = new lib.Agent({ keepAlive: true });
 
-function forward(req, bodyBuf, onResponse) {
+function forward(req, bodyBuf, onResponse, extraBeta) {
   const headers = {};
   for (const [k, v] of Object.entries(req.headers)) if (!HOP.has(k)) headers[k] = v;
   headers["accept-encoding"] = "identity"; // so usage can be read off the stream
+  if (extraBeta && !String(headers["anthropic-beta"] || "").includes(extraBeta))
+    headers["anthropic-beta"] = [headers["anthropic-beta"], extraBeta].filter(Boolean).join(",");
   if (bodyBuf) headers["content-length"] = bodyBuf.length;
   const base = upstreamUrl.pathname.replace(/\/$/, "");
   const up = lib.request({
@@ -238,6 +244,7 @@ function relay(upRes, res, entry) {
         const ev = JSON.parse(line.slice(5));
         if (ev.type === "message_start") Object.assign(usage, ev.message?.usage, { model: ev.message?.model });
         if (ev.type === "message_delta" && ev.usage) Object.assign(usage, ev.usage);
+        if (ev.type === "message_delta" && ev.context_management?.applied_edits?.length) usage.applied_edits = ev.context_management.applied_edits;
       } catch {}
     }
   });
@@ -287,31 +294,46 @@ function handle(req, res) {
       fresh: !pin && n <= 1, ctx: estTokens(raw), pin, spend, limit,
     });
 
+    if (CFG.policy === "smart" && EXPENSIVE.test(body.model)) {
+      d = decideSmart({
+        requested: body.model, messages: body.messages, sub: isSubagent(body), aux: !(Array.isArray(body.tools) && body.tools.length),
+        boundary: isTurnBoundary(body), fresh: !pin && n <= 1, ctx: estTokens(raw), pin, overBudget: limit > 0 && spend / limit >= CFG.threshold,
+      });
+      if (ctxEditOff) d.ctxEdit = false;
+    }
     if (d.model !== body.model && rejected.has(`${d.model}|${beta}`)) d = { model: body.model, reason: `${d.reason} (skipped: rejected before)` };
 
     const requested = body.model;
     let switchIndex = pin?.switchIndex;
     if (!counting) {
-      if (d.switched && pin) switchIndex = body.messages.length - 1;
-      if (!pin || d.switched) setPin(key, { model: d.model, switchIndex, n });
-      else pin.n = n; // remember the history length to spot /clear and /compact
+      // Budget policy strips old thinking at a switch. Smart policy doesn't: other models ignore
+      // foreign thinking blocks, and keeping the history byte-identical lets a model that comes
+      // back later (e.g. Opus after a quick Haiku answer) still hit its own cache.
+      if (d.switched && pin && CFG.policy !== "smart") switchIndex = body.messages.length - 1;
+      if (!pin || d.switched) setPin(key, { model: d.model, switchIndex, n, tier: d.tier, effort: d.effort, ctxEdit: d.ctxEdit });
+      else { pin.n = n; if (d.ctxEdit) pin.ctxEdit = true; } // n spots /clear and /compact
     }
     const original = raw;
     let outBuf = raw, stripped = 0;
-    if (d.model !== body.model || switchIndex) {
+    if (d.model !== body.model || switchIndex || d.effort || d.ctxEdit) {
       stripped = stripOldThinking(body, switchIndex);
       body.model = d.model;
       if (d.model !== requested) applyQuirks(body, d.model);
+      if (d.effort) body.output_config = { ...(body.output_config || {}), effort: d.effort };
+      if (d.ctxEdit && !body.context_management && !counting) body.context_management = contextEdits();
       outBuf = Buffer.from(JSON.stringify(body));
     }
-    const entry = { conv: key, requested, routed: d.model, reason: d.reason, stripped, path: req.url };
+    const extraBeta = body.context_management && !JSON.parse(original.toString("utf8")).context_management ? CTX_BETA : undefined;
+    const entry = { conv: key, requested, routed: d.model, reason: d.reason, stripped, path: req.url,
+      ...(d.tier && { tier: d.tier }), ...(d.cls && { signals: d.cls.signals }), ...(extraBeta && { ctxEdit: true }) };
+    let strippedRetry = false;
     let repaired = false;
 
     let up = forward(req, outBuf, function onRes(upRes, e) {
       if (e) return fail(res, e);
       // Fail open: if the rewritten request is rejected (unsupported beta,
       // param, or thinking block), resend the original once.
-      if (upRes.statusCode === 400 && outBuf !== original && d.model !== requested) {
+      if (upRes.statusCode === 400 && outBuf !== original) {
         const errChunks = [];
         upRes.on("data", (c) => errChunks.push(c));
         upRes.on("end", () => {
@@ -320,6 +342,24 @@ function handle(req, res) {
           if (!repaired && learnQuirk(d.model, error) && applyQuirks(body, d.model)) {
             repaired = true;
             log({ ...entry, status: 400, note: "adapted request for target model", error });
+            outBuf = Buffer.from(JSON.stringify(body));
+            up = forward(req, outBuf, onRes, extraBeta);
+            return;
+          }
+          // Smart policy keeps old thinking blocks; if the target model objects, retry once without them.
+          if (CFG.policy === "smart" && !strippedRetry && /thinking|signature/i.test(error) && d.model !== requested) {
+            strippedRetry = true;
+            const n2 = stripOldThinking(body, body.messages.length);
+            log({ ...entry, status: 400, note: `retrying with ${n2} old thinking blocks removed`, error });
+            outBuf = Buffer.from(JSON.stringify(body));
+            up = forward(req, outBuf, onRes, extraBeta);
+            return;
+          }
+          // Context editing rejected: turn it off for good and resend the same routing without it.
+          if (extraBeta && body.context_management && /context.?management|context.?edit|clear_tool_uses/i.test(error)) {
+            ctxEditOff = true;
+            delete body.context_management;
+            log({ ...entry, status: 400, note: "context editing rejected; resent without it", error });
             outBuf = Buffer.from(JSON.stringify(body));
             up = forward(req, outBuf, onRes);
             return;
@@ -332,7 +372,7 @@ function handle(req, res) {
         return;
       }
       relay(upRes, res, entry);
-    });
+    }, extraBeta);
     res.on("close", () => { if (!res.writableFinished) up.destroy(); });
   });
 }
