@@ -178,7 +178,7 @@ One full native iOS app (SwiftUI home planner, 3 user turns, Opus) per setup. Ev
 
 ## 7. Full app build: coffee shop website
 
-A coffee shop website with backend and admin panel, built from one fixed plan by every setup. All five builds passed all 37 acceptance checks. Details: **[BENCHMARKS-WEBSHOP.md](BENCHMARKS-WEBSHOP.md)**.
+A coffee shop website with backend and admin panel, built from one fixed plan by every setup. All seven builds passed all 37 acceptance checks. Details: **[BENCHMARKS-WEBSHOP.md](BENCHMARKS-WEBSHOP.md)**.
 
 | Setup | Cost | vs no plugin |
 |---|---|---|
@@ -186,7 +186,9 @@ A coffee shop website with backend and admin panel, built from one fixed plan by
 | Plugin (router off, default) | $10.85 | +28% |
 | Plugin + hook router | $14.87 | +75% |
 | Plugin + routing proxy ($8 budget, never crossed mid-build) | $8.16 | −4% |
-| Plugin + routing proxy + low effort | **$6.61** | **−22%** |
+| Plugin + routing proxy + low effort ($8 budget) | $6.61 | −22% |
+| Plugin + routing proxy ($3 budget, switched at turn 3) | $8.20 | −3% |
+| Plugin + routing proxy + low effort ($3 budget, never switched) | **$4.14** | **−51%** |
 
 ## 8. Caveats
 

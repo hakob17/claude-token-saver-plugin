@@ -6,22 +6,27 @@ Task: build "Brew & Bean", a coffee brewing website and shop, from an empty repo
 
 Graded by a black-box acceptance test the builds never see ([webshop-check.mjs](webshop-check.mjs)): 37 checks covering the API contract (validation, stock, cancellation), the four pages, admin auth, and data persisting across a restart, plus the build's own `npm test`.
 
-| Setup | Acceptance | npm test | Cost (API-equivalent) | vs no plugin | Turns | Output tokens |
-|---|---|---|---|---|---|---|
-| No plugin | 37/37 ✅ | ✅ | **$8.48** | — | 29 | 118k |
-| Plugin (router off, default) | 37/37 ✅ | ✅ | **$10.85** | +28% | 51 | 124k |
-| Plugin + hook router | 37/37 ✅ | ✅ | **$14.87** | +75% | 100 | 163k |
-| Plugin + routing proxy ($8 budget) | 37/37 ✅ | ✅ | **$8.16** | −4% | 55 | 106k |
-| Plugin + routing proxy + low effort | 37/37 ✅ | ✅ | **$6.61** | −22% | 52 | 81k |
+| Setup | Acceptance | npm test | Cost (API-equivalent) | vs no plugin | Turns | Output tokens | On Sonnet 5.5 |
+|---|---|---|---|---|---|---|---|
+| No plugin | 37/37 ✅ | ✅ | **$8.48** | — | 29 | 118k | — |
+| Plugin (router off, default) | 37/37 ✅ | ✅ | **$10.85** | +28% | 51 | 124k | — |
+| Plugin + hook router | 37/37 ✅ | ✅ | **$14.87** | +75% | 100 | 163k | — |
+| Plugin + routing proxy ($8 budget) | 37/37 ✅ | ✅ | **$8.16** | −4% | 55 | 106k | 0 req. |
+| Plugin + routing proxy + low effort ($8 budget) | 37/37 ✅ | ✅ | **$6.61** | −22% | 52 | 81k | 0 req. |
+| Plugin + routing proxy ($3 budget) | 37/37 ✅ | ✅ | **$8.20** | −3% | 77 | 121k | 20 req. |
+| Plugin + routing proxy + low effort ($3 budget) | 37/37 ✅ | ✅ | **$4.14** | −51% | 34 | 49k | 0 req. |
 
 - Plugin + routing proxy ($8 budget): 0 of 54 requests went to Sonnet 5.5, 1 held on Opus mid-turn, 0 switches.
-- Plugin + routing proxy + low effort: 0 of 53 requests went to Sonnet 5.5, 0 held on Opus mid-turn, 0 switches.
+- Plugin + routing proxy + low effort ($8 budget): 0 of 53 requests went to Sonnet 5.5, 0 held on Opus mid-turn, 0 switches.
+- Plugin + routing proxy ($3 budget): 20 of 76 requests went to Sonnet 5.5, 32 held on Opus mid-turn, 1 switches.
+- Plugin + routing proxy + low effort ($3 budget): 0 of 35 requests went to Sonnet 5.5, 6 held on Opus mid-turn, 0 switches.
 
 ## What it shows
 
 - **Every setup built a fully working app** (37/37 plus its own tests), so cost is the only difference. One run per setup: differences under about 15% are within noise.
-- **Low effort is the lever that worked here: −22%** with full quality. It wrote about a third less output (81k vs 118k tokens). Its proxy never switched (see below), so this saving is low effort plus the plugin.
-- **The routing proxy didn't route on this app.** The whole build cost about $8, the same as the proxy's budget, so the budget was crossed in the last request of the final turn and there was no later turn to switch at. It cost the same as no plugin (−4%, noise), which shows the proxy adds no overhead; the saving it showed on the larger iOS build (−52%) needs a budget that's crossed mid-build. For small projects the budget would have to be scaled down to have any effect.
+- **Low effort is the lever that worked here: −22% and −51%** in two runs, both with full quality. Neither run's proxy switched (each crossed its budget mid-way through the last turn), so the saving is low effort plus the plugin. The two runs differ by $2.47 for the same setup, which shows how large run-to-run variance is on these builds.
+- **The routing proxy saved nothing on this app, even with a budget scaled to its size.** With a $3 budget it did fail over: spend passed $3 in turn 1, but at the turn-2 boundary the context was over 40k and spend only 104% (under the 110% hard limit), so it held Opus; it switched at turn 3 (224% of budget) and ran that turn on Sonnet (20 requests, $1.49). Total $8.20, the same as no plugin, with more turns (77). On a 3-turn app most of the spend happens before the first boundary where switching is allowed, so a turn-boundary policy has little to work with; the −52% on iOS came from a longer final turn on Sonnet.
+- **With the $8 budget the proxy didn't route at all.** The whole build cost about $8, the same as the proxy's budget, so the budget was crossed in the last request of the final turn and there was no later turn to switch at. It cost the same as no plugin (−4%, noise), which shows the proxy adds no overhead; the saving it showed on the larger iOS build (−52%) needs a budget that's crossed mid-build. For small projects the budget would have to be scaled down to have any effect.
 - **The hook router was the most expensive again: +75%** (+46% on iOS), with 100 turns against 29. It stays off by default.
 - **The plugin alone cost 28% more here** (51 turns vs 29) after saving 8% on iOS; at one run each, the plugin-vs-no-plugin difference on these builds is within noise.
 - **Run notes.** The first attempt hit the plan's usage limit mid-build; those records are kept in `bench/results/webshop-2026-10-aborted-limit/`. The no-plugin and plugin builds were resumed in their original sessions, so their totals include the work before the stop. Two acceptance checks were made type-aware before the final grading (an unknown id of the app's own id type; out-of-stock as stock + 1 instead of an invalid quantity), and the reference implementation still passes all 37.
@@ -30,5 +35,6 @@ Graded by a black-box acceptance test the builds never see ([webshop-check.mjs](
 
 ```bash
 sh bench/run-webshop-2026-10.sh   # 5 setups from bench/fixture/webshop-PLAN.md; bills the signed-in claude CLI
+sh bench/run-webshop-budget3.sh   # the two proxy setups with a $3 budget
 node bench/all.mjs                # rebuild this file and BENCHMARKS.md
 ```
