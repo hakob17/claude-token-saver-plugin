@@ -154,6 +154,21 @@ When enabled (`/token-saver:router on`, or `TOKEN_SAVER_ROUTER=on`) and the sess
 - The coder reports interface changes; when it finishes, Opus must review via `git diff` before finishing, and send fixes back rather than rewriting.
 - Subagent edits and Sonnet/Haiku sessions are never touched.
 
+### 5a. Routing proxy *(experimental)*
+
+The alternative to the hook router: a local gateway that chooses the model **per request, before generation**, so Opus never pays for code it isn't allowed to write. Design and benchmark plan: [bench/ROUTING-PROXY.md](bench/ROUTING-PROXY.md). On one full native iOS app build it cost **$14.21 vs $29.63 without the plugin (−52%)**, with every quality check passing (one run; [BENCHMARKS.md](bench/BENCHMARKS.md) section 6).
+
+```bash
+node plugins/token-saver/proxy/router-proxy.mjs            # listens on 127.0.0.1:8787
+ANTHROPIC_BASE_URL=http://127.0.0.1:8787 claude             # in another terminal
+```
+
+- **Budget failover:** once the month's spend (from the *Monthly budget* ledger; needs the Option B status line) reaches the budget, Opus requests go to `claude-sonnet-5-5`.
+- **Subagents (optional):** `TOKEN_SAVER_PROXY_SUBAGENTS=claude-haiku-5-5` sends subagents that inherit Opus to a cheaper model.
+- A conversation only changes model at a boundary: a new session, `/clear`, `/compact`, or a new user turn while the context is still small. It never changes mid tool-loop, so the prompt cache and thinking chain stay intact. Old-model thinking blocks are dropped at the switch point.
+- Streams pass through unchanged. If the cheaper model rejects a rewritten request, the proxy resends the original (fails open). Usage is logged to `~/.claude/token-saver/proxy-log.jsonl`, and `http://127.0.0.1:8787/token-saver/status` shows its state.
+- Settings: `TOKEN_SAVER_PROXY_{PORT,UPSTREAM,FALLBACK,THRESHOLD,HARD,SUBAGENTS,SWITCH,MAX_SWITCH_CTX,LOG}`, documented in the design note. Offline test: `node plugins/token-saver/proxy/smoke-test.mjs`.
+
 ### 6. Status line *(Option B)*
 ```
 [Sonnet 5.5] $0.84 · ctx 45k · month $42.10/$100 (42%)
@@ -271,6 +286,8 @@ plugins/token-saver/
     budget-watch.mjs                budget warnings at 50/80/95/100%
     model-switch.mjs                tracks /model changes
     lib.mjs                         shared helpers and thresholds
+  proxy/router-proxy.mjs            experimental routing proxy (ANTHROPIC_BASE_URL), see bench/ROUTING-PROXY.md
+  proxy/smoke-test.mjs              offline test with a fake upstream
   agents/   coder.md  grunt.md  scout.md
   commands/ handoff.md  resume.md  find.md  grunt.md  review-diff.md  budget.md  router.md
 install.mjs                         installer (settings, status line, budget, plugin)

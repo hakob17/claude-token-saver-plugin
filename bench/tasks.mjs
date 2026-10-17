@@ -19,6 +19,22 @@ function parseTap(out) {
   const fail = Number((out.match(/^# fail (\d+)/m) || [])[1] || 0);
   return { pass, fail };
 }
+// Build/test command for the native task; returns { ok, tail } and never throws.
+function build(dir, cmd, timeout = 20 * 60_000) {
+  try {
+    const out = execSync(cmd, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout, env: NATIVE_ENV, maxBuffer: 64 << 20 });
+    return { ok: true, tail: out.slice(-300) };
+  } catch (e) {
+    return { ok: false, tail: String(e.stdout || "").slice(-300) + String(e.stderr || "").slice(-300) };
+  }
+}
+const HOME = process.env.HOME;
+// One simulator per parallel worker, so concurrent runs don't fight over a device.
+const IOS_SIMS = (process.env.BENCH_IOS_SIMS || "iPhone 16,iPhone 16 Plus").split(",");
+const simFor = (job) => IOS_SIMS[(job?.worker || 0) % IOS_SIMS.length];
+const NATIVE_ENV = process.env;
+const iosTest = (sim) => `xcodebuild test -project ios/HomePlanner.xcodeproj -scheme HomePlanner -destination 'platform=iOS Simulator,name=${sim},OS=27.0' -derivedDataPath build/ios -collect-test-diagnostics never CODE_SIGNING_ALLOWED=NO -quiet`;
+
 function sh(dir, cmd) {
   try {
     return execSync(cmd, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
@@ -103,6 +119,59 @@ export const TASKS = {
       const left = Number(sh(dir, "grep -rio userid src test | wc -l").trim());
       const ok = t.fail === 0 && t.pass >= BASE_TESTS && left === 0;
       return { ok, detail: `tests ${t.pass} pass / ${t.fail} fail, userId left: ${left}` };
+    },
+  },
+
+  // Greenfield, two native apps. Opt-in: long and expensive (run with --tasks homeplanner).
+  homeplanner: {
+    title: "Native iOS home planner with LLM assistant",
+    optIn: true,
+    timeoutMin: 0, // no cap: a native build-and-fix loop can run long
+    fixture: { empty: true },
+    // Three user turns in one session, as a person would build it. Turn boundaries
+    // are where the routing proxy may switch models. iOS only.
+    turns: [
+      (job) =>
+        "We're building a native iOS home planner app (SwiftUI) in this empty repo. Users draw their house outline, rooms and " +
+        "garden on a 2D canvas: walls/areas as polygons on a snapping grid, drag to move vertices, dimensions in metres and room " +
+        "areas shown. Plans are saved and loaded locally as JSON; later an AI assistant will edit plans, so define the plan JSON " +
+        "format now and document it in docs/plan-format.md. Put the app in ios/HomePlanner.xcodeproj with scheme HomePlanner and a " +
+        "unit test target, with tests for geometry (area, snapping, polygon validity) and plan JSON round-trip. It must pass: " +
+        iosTest(simFor(job)) + "\nOther builds share this Mac: use only the " + simFor(job) + " simulator, and never shut down, " +
+        "erase or delete other simulators (no 'simctl shutdown all').",
+      (job) =>
+        "Add a small catalogue of furniture and garden items (e.g. sofa, bed, table, tree, flower bed, vegetable patch): place them " +
+        "on the plan, move, rotate and delete them, and save them in the plan JSON (update docs/plan-format.md). Add tests for " +
+        "placement and serialisation. It must pass: " + iosTest(simFor(job)),
+      (job) =>
+        "Add the AI assistant: a panel that sends the current plan JSON plus the user's request (e.g. 'arrange the living room', " +
+        "'plan a vegetable garden') to the Anthropic Messages API and applies the suggested plan changes. The API key is entered in a " +
+        "settings screen (never hard-code or commit a key). Keep the LLM client behind a protocol with a fake used by tests, and test " +
+        "applying suggestions. Then make the app ready to install: it must build, install and launch on the iOS simulator. It must " +
+        "pass: " + iosTest(simFor(job)) + ". Add a README with build and install steps.",
+    ],
+    check(dir, _result, job) {
+      const sim = simFor(job);
+      const ios = build(dir, iosTest(sim));
+      const g = (pat) => Number(sh(dir, `grep -rlE '${pat}' ios 2>/dev/null | wc -l`).trim());
+      const features = {
+        canvas: g("Canvas|Path\\(|DragGesture") > 0,
+        garden: g("[Gg]arden") > 0,
+        catalogue: g("[Ss]ofa|[Ff]urniture") > 0,
+        llm: g("api\\.anthropic\\.com|/v1/messages") > 0,
+        no_key: !sh(dir, "git ls-files -co --exclude-standard | xargs grep -lE 'sk-ant-(api|oat|admin)[0-9]{2}-[A-Za-z0-9_-]{40,}' 2>/dev/null").trim(),
+      };
+      const testFiles = g("XCTestCase|@Test");
+      // Ready to install: the built app installs and launches on the simulator.
+      const app = sh(dir, "ls -d build/ios/Build/Products/Debug-iphonesimulator/*.app 2>/dev/null | head -1").trim();
+      // The simulator by name on iOS 27.0 (names repeat across runtimes).
+      const udid = sh(dir, `xcrun simctl list devices 'iOS 27.0' | grep -F '    ${sim} (' | grep -oE '[0-9A-F-]{36}' | head -1`).trim();
+      const bundle = app && sh(dir, `/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${app}/Info.plist"`).trim();
+      features.installable = !!bundle && build(dir, `xcrun simctl boot "${udid}" 2>/dev/null; xcrun simctl install "${udid}" "${app}" && xcrun simctl launch "${udid}" ${bundle}`, 120_000).ok;
+      const swiftLines = Number(sh(dir, "find ios -name '*.swift' | xargs cat 2>/dev/null | wc -l").trim());
+      const ok = ios.ok && testFiles > 0 && Object.values(features).every(Boolean);
+      const missing = Object.entries(features).filter(([, v]) => !v).map(([k]) => k);
+      return { ok, detail: `build+test:${ios.ok} test files:${testFiles} swift lines:${swiftLines}${missing.length ? " missing:" + missing.join(",") : ""}` };
     },
   },
 };

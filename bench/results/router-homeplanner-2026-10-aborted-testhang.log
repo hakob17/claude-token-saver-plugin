@@ -1,0 +1,5 @@
+Benchmark: 4 runs (opus × homeplanner × baseline,plugin,plugin+router,plugin+proxy × 1), parallel 2, budget $400
+Work dir: /var/folders/qt/3x2b19kd30b4rtg5yq6_7v140000gn/T/ts-bench-iOpGxI
+Results: /Users/Hakob_Hakobyan1/CascadeProjects/llm-features/claude-token-saver-plugin/bench/results/router-homeplanner-2026-10/runs.jsonl
+
+[1/4] opus-homeplanner-plugin-r1               $ 24.795  turns 100  FAIL  build+test:false test files:9 swift lines:6980 missing:no_key   (total $24.79)

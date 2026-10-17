@@ -1,0 +1,7 @@
+{
+  "name": "token-saver-routing-demo",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=18" },
+  "scripts": { "start": "node server.mjs" }
+}

@@ -13,6 +13,7 @@ const desktop = run("node bench/desktop/report.mjs")
 
 const longMd = run("node bench/long/report.mjs");
 const effortMd = run("node bench/effort-report.mjs");
+const routerMd = run("node bench/router-report.mjs");
 const effortRuns = load("bench/results/effort/runs.jsonl");
 const longRuns = load("bench/long/results/runs.jsonl");
 const rounds = ["round1", "round2", "round3", "round4"].map((r) => load(`bench/results/${r}/runs.jsonl`));
@@ -110,20 +111,35 @@ ${effortMd}
 - **High effort isn't free insurance:** 21–36% more, mostly from writing many more tests (Sonnet: 54 vs 21 on the large feature).
 - The plugin and low effort weren't measured together. Both work mainly by shortening output, so their savings likely overlap rather than add up.
 
-## 6. Caveats
+## 6. Full app build: router setups
+
+Does routing Opus work to cheaper models pay off on a whole project? One full native iOS app per setup: no plugin, the plugin as shipped, the plugin with the hook router (\`TOKEN_SAVER_ROUTER=on\`), and the plugin behind the experimental routing proxy (subagents to Sonnet 5.5, main thread fails over to Sonnet 5.5 once \$8 is spent, at a turn boundary). See [ROUTING-PROXY.md](ROUTING-PROXY.md) for the proxy design.
+
+${routerMd}
+
+- **Every setup produced a working app**, so cost is the difference. With one run per setup, treat differences under about 15% as noise.
+- **The plugin as shipped saved 8%** without any routing, in line with the smaller Opus tasks above.
+- **The hook router cost 46% more than no plugin** (+58% vs. the plugin alone), the same direction as the earlier +31%: it blocks large writes only after Opus has generated them, then pays again for delegation. It did write more code and tests. It stays off by default.
+- **The routing proxy was the cheapest setup: 52% less than no plugin** (48% less than the plugin alone), and the app passed every check. Turns 1–2 ran on Opus; spend passed the \$8 budget during turn 2, so the proxy held Opus to the end of that turn (17 requests, keeping the prompt cache), then switched to Sonnet 5.5 at the turn-3 boundary and stayed there (28 requests, \$3.99). Part of the saving is that this build did less work (106 turns, 8 test files vs 138 and 7 without the plugin); one run per setup, so the exact percentage is soft.
+- **The first proxy run (v1) found a bug:** it keyed conversations by a hash of the opening message, which Claude Code rewrites mid-session, so after switching to Sonnet it lost track, went back to Opus with a 365k-token cache write, and cost \$31.51. Keying the main thread by session id fixed it; the smoke test now replays that case.
+- **Claude Code's own cost report is wrong under the proxy:** it said \$20.20 because it prices every request as the model it asked for (Opus). The true cost from the proxy log is \$14.21.
+- Wall-clock times aren't reported: the first two builds were slowed by an xcodebuild hang (fixed with \`-collect-test-diagnostics never\`) and an Xcode auto-update mid-run.
+
+## 7. Caveats
 
 - These are synthetic projects and documents, a single user, and 3 runs per cell. Differences of ±10% on tasks costing $0.03–0.10 are within run-to-run noise.
 - The desktop plugin was measured in Claude Code, not in the desktop app itself.
 - Long sessions were measured with 19 requests (Opus: 2 runs per setup). Even longer days, sessions spanning breaks (cache expiry), and auto-compaction weren't measured.
 - The "be terse" rules may trim thoroughness on big jobs. On the large feature, Opus with the plugin wrote fewer new tests on average (28 vs 36), though all checks passed.
 
-## 7. Reproduce
+## 8. Reproduce
 
 \`\`\`bash
 node bench/run.mjs --models sonnet,opus --runs 3 --budget 15     # Claude Code plugin
 node bench/desktop/run.mjs --models sonnet,opus --runs 3 --budget 15   # desktop plugin
 node bench/long/run.mjs --models sonnet,opus --runs 3 --budget 20      # long sessions
 node bench/run.mjs --configs effort-low,effort-medium,effort-high --out bench/results/effort --budget 15   # effort levels
+sh bench/run-router-2026-10.sh                                     # router setups, full iOS app (needs Xcode)
 node bench/all.mjs                                                 # rebuild this file
 \`\`\`
 

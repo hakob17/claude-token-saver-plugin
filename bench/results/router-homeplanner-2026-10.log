@@ -1,0 +1,53 @@
+Benchmark: 4 runs (opus × homeplanner × baseline,plugin,plugin+router,plugin+proxy × 1), parallel 2, budget $400
+Work dir: /var/folders/qt/3x2b19kd30b4rtg5yq6_7v140000gn/T/ts-bench-WW9UIq
+Results: /Users/Hakob_Hakobyan1/CascadeProjects/llm-features/claude-token-saver-plugin/bench/results/router-homeplanner-2026-10/runs.jsonl
+
+[1/4] opus-homeplanner-baseline-r1             $ 29.627  turns 138  FAIL  build+test:false test files:7 swift lines:6676 missing:installable   (total $29.63)
+[2/4] opus-homeplanner-plugin-r1               $ 27.367  turns 123  PASS  build+test:true test files:6 swift lines:7396   (total $56.99)
+Benchmark: 2 runs (opus × homeplanner × plugin+router,plugin+proxy × 1), parallel 2, budget $400
+Work dir: /var/folders/qt/3x2b19kd30b4rtg5yq6_7v140000gn/T/ts-bench-bzrrPx
+Results: /Users/Hakob_Hakobyan1/CascadeProjects/llm-features/claude-token-saver-plugin/bench/results/router-homeplanner-2026-10/runs.jsonl
+
+[1/2] opus-homeplanner-plugin+router-r1        $ 43.299  turns 100  PASS  build+test:true test files:11 swift lines:8392   (total $43.30)
+[2/2] opus-homeplanner-plugin+proxy-r1         $ 31.510 (CC says $32.28)  turns 209  PASS  build+test:true test files:15 swift lines:9436   (total $74.81)
+
+# token-saver benchmark results
+
+Runs: 4. Each run = fresh copy of the sample project, `claude -p` headless, then an automatic quality check.
+Savings compare mean cost per task (baseline → plugin). Quality = runs passing the task's check.
+
+| Model | Task | Runs (base/plugin) | Mean cost base | Mean cost plugin | Saving | Median saving | Input tokens base → plugin | Output tokens base → plugin | Turns base → plugin | Quality base | Quality plugin |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| opus | Native iOS home planner with LLM assistant | 1/1 | $29.628 | $27.368 | **−8%** | −8% | 33152k → 27206k | 233.2k → 250.6k | 138.0 → 123.0 | 1/1 | 1/1 |
+
+## Overall (mean of per-task means)
+
+| Model | Cost per task base | Cost per task plugin | Saving | Quality base | Quality plugin |
+|---|---|---|---|---|---|
+| opus | $29.628 | $27.368 | **−8%** | 1/1 | 1/1 |
+
+_Negative saving (+%) means the plugin cost more on that task._
+
+Benchmark: 1 runs (opus × homeplanner × plugin+proxy × 1), parallel 1, budget $400
+Work dir: /var/folders/qt/3x2b19kd30b4rtg5yq6_7v140000gn/T/ts-bench-8tE0vw
+Results: /Users/Hakob_Hakobyan1/CascadeProjects/llm-features/claude-token-saver-plugin/bench/results/router-homeplanner-2026-10/runs.jsonl
+
+[1/1] opus-homeplanner-plugin+proxy-r1         $ 14.215 (CC says $20.20)  turns 106  PASS  build+test:true test files:8 swift lines:6889   (total $14.21)
+
+# token-saver benchmark results
+
+Runs: 5. Each run = fresh copy of the sample project, `claude -p` headless, then an automatic quality check.
+Savings compare mean cost per task (baseline → plugin). Quality = runs passing the task's check.
+
+| Model | Task | Runs (base/plugin) | Mean cost base | Mean cost plugin | Saving | Median saving | Input tokens base → plugin | Output tokens base → plugin | Turns base → plugin | Quality base | Quality plugin |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| opus | Native iOS home planner with LLM assistant | 1/1 | $29.628 | $27.368 | **−8%** | −8% | 33152k → 27206k | 233.2k → 250.6k | 138.0 → 123.0 | 1/1 | 1/1 |
+
+## Overall (mean of per-task means)
+
+| Model | Cost per task base | Cost per task plugin | Saving | Quality base | Quality plugin |
+|---|---|---|---|---|---|
+| opus | $29.628 | $27.368 | **−8%** | 1/1 | 1/1 |
+
+_Negative saving (+%) means the plugin cost more on that task._
+
