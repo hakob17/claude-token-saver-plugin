@@ -51,13 +51,16 @@ export function recentTrouble(body) {
 const SIMPLE_RE = /\b(what|why|where|which|who|when|how (does|do|is|are|can)|explain|show me|summari[sz]e|describe|tell me|is there|does (it|this)|list)\b/i;
 const HARD_RE = /\b(design|architect(ure)?|plan|refactor|migrat(e|ion)|rewrite|from scratch|end[- ]to[- ]end|implement|build|integrat(e|ion)|optimi[sz]e|performance|security|scal(e|ability)|whole|entire|across)\b/gi;
 const EDIT_RE = /\b(add|fix|change|update|rename|create|write|remove|delete|move|test|bump|tweak|adjust|replace)\b/gi;
+// "don't change anything", "without refactoring": a negated verb asks for less work, not more.
+const NEG_RE = /\b(?:don'?t|do not|never|without|no need to|not)\s+(?:\w+\s+)?(?:add|fix|change|update|rename|create|write|remove|delete|move|test|bump|tweak|adjust|replace|modify|edit|touch|refactor|rewrite|build|implement|migrate|redesign)\w*/gi;
 const FILE_RE = /[\w./-]+\.(m?[jt]sx?|swift|kt|py|go|rb|java|json|md|css|s?html|ya?ml|sql|sh|toml)\b/g;
 
 // Score the user's message. Positive = harder.
 export function classifyTurn(body) {
   const text = userText(body);
   const len = text.length;
-  const words = text.replace(FILE_RE, " "); // "docs/PLAN.md" names a file, it doesn't ask for a plan
+  // "docs/PLAN.md" names a file, it doesn't ask for a plan; negated verbs don't ask for work
+  const words = text.replace(FILE_RE, " ").replace(NEG_RE, " ");
   const hard = new Set((words.match(HARD_RE) || []).map((w) => w.toLowerCase())).size;
   const edits = new Set((words.match(EDIT_RE) || []).map((w) => w.toLowerCase())).size;
   const files = new Set(text.match(FILE_RE) || []).size;

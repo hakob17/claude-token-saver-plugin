@@ -86,7 +86,7 @@ ${smartMd}
 **With the fixed defaults, over 3 rounds: the smart router averaged \$6.16 against \$12.04 without the plugin (−49%), and all 6 builds passed 37/37.** It was also far more stable (\$5.58–6.65 vs \$8.22–14.71) and needed fewer turns (58–70 vs 74–104).
 
 - **Where the savings come from:** questions on Haiku cost about 1–2 cents each; the shop build on Sonnet cost \$0.78–1.17; the two big builds stay on Opus. Each return to Opus rebuilds its cache once (visible as "1 cache rebuild" per turn), which the cheaper turns more than pay for.
-- **One misroute left:** in round 2 the question "How is the cart stored? Just explain, don't change anything." was sent to Sonnet (\$0.34), because "change" counts as an edit word and the previous turn had 4 failing tool calls. Negations like "don't change" aren't recognised yet.
+- **One misroute:** in round 2 the question "How is the cart stored? Just explain, don't change anything." was sent to Sonnet (\$0.34), because "change" counts as an edit word and the previous turn had 4 failing tool calls. **Fixed:** negated verbs ("don't change", "without refactoring") are now ignored, so this question routes to Haiku.
 - **The no-plugin runs vary a lot on their own** (74–104 turns), so single-run comparisons, including the earlier ones below, are noisy.
 
 ### Earlier single runs (before the fixes)

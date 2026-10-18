@@ -30,7 +30,7 @@ The classifier reads the user's own words (injected `<system-reminder>` text and
 | First turn of a new project with a real brief (> 400 characters) | +1 |
 | The previous turn had 3+ failing tool calls or failing tests | escalate one tier (not for a plain question unless it asks about the failure) |
 
-File names are removed before matching words, so `docs/PLAN.md` doesn't count as "plan".
+File names and negated verbs are removed before matching words, so `docs/PLAN.md` doesn't count as "plan" and "just explain, don't change anything" doesn't count as an edit.
 
 | Score | Tier | Model (configurable) | Effort |
 |---|---|---|---|

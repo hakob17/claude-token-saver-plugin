@@ -44,6 +44,8 @@ failing.push({ role: "assistant", content: [{ type: "text", text: "still failing
 assert.equal(classifyTurn(msg("why does it fail?", failing)).tier, "standard", "repeated failures escalate a simple turn");
 assert.equal(classifyTurn(msg("where is the admin password configured?", failing)).tier, "simple", "a plain question isn't escalated by earlier failures");
 assert.equal(classifyTurn(msg("Add a rename button to the product card", failing)).tier, "hard", "a work turn after failures escalates");
+assert.equal(classifyTurn(msg("How is the cart stored in the browser? Just explain, don't change anything.", failing)).tier, "simple", "a negated edit word (\"don't change\") doesn't make a question a work turn");
+assert.equal(classifyTurn(msg("Fix the cart total, but don't refactor the API", prior)).tier, "standard", "only the negated verb is ignored");
 
 // ---- proxy end to end ----
 const seen = [];
