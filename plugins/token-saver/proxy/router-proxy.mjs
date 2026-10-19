@@ -184,6 +184,11 @@ export function priceUsage(model, u = {}) {
     w5m * inp * 1.25 + w1h * inp * 2) / 1e6;
 }
 let ownSpend = 0;
+// Optional hooks for a multi-user gateway (see ../team/gateway.mjs). All optional:
+//   route(req, res) -> true if handled; identify(req) -> user | null (null = 401);
+//   budget(user) -> { spend, limit }; adjust(user, d, requested, pin) -> d; gate(user, requested) -> error text | null;
+//   headers(headers, req, user) -> mutate outgoing headers; onLog(entry).
+let H = {};
 
 let spendCache = { at: 0, spend: 0, limit: 0 };
 function budget() {
@@ -195,6 +200,7 @@ function budget() {
   return spendCache;
 }
 function log(entry) {
+  try { H.onLog?.(entry); } catch {}
   try { fs.appendFileSync(CFG.log, JSON.stringify({ ts: new Date().toISOString(), ...entry }) + "\n"); } catch {}
 }
 
@@ -207,6 +213,7 @@ const agent = new lib.Agent({ keepAlive: true });
 function forward(req, bodyBuf, onResponse, extraBeta) {
   const headers = {};
   for (const [k, v] of Object.entries(req.headers)) if (!HOP.has(k)) headers[k] = v;
+  H.headers?.(headers, req, req.tsUser);
   headers["accept-encoding"] = "identity"; // so usage can be read off the stream
   if (extraBeta && !String(headers["anthropic-beta"] || "").includes(extraBeta))
     headers["anthropic-beta"] = [headers["anthropic-beta"], extraBeta].filter(Boolean).join(",");
@@ -264,7 +271,17 @@ function fail(res, e) {
   res.end(JSON.stringify({ type: "error", error: { type: "api_error", message: `token-saver proxy: ${e.message}` } }));
 }
 
+function deny(res, status, type, message) {
+  res.writeHead(status, { "content-type": "application/json" });
+  res.end(JSON.stringify({ type: "error", error: { type, message } }));
+}
+
 function handle(req, res) {
+  if (H.route?.(req, res)) return;
+  if (H.identify) {
+    req.tsUser = H.identify(req);
+    if (!req.tsUser) return deny(res, 401, "authentication_error", "token-saver gateway: unknown or disabled engineer key");
+  }
   if (req.method === "GET" && req.url === "/token-saver/status") {
     res.writeHead(200, { "content-type": "application/json" });
     return res.end(JSON.stringify({ config: CFG, budget: budget(), conversations: Object.fromEntries(pins) }, null, 2));
@@ -283,11 +300,17 @@ function handle(req, res) {
     }
 
     const counting = req.url.startsWith("/v1/messages/count_tokens");
-    const key = conversationKey(body, req.headers);
+    const user = req.tsUser;
+    const key = (user ? `${user.id}|` : "") + conversationKey(body, req.headers);
     const n = convo(body).length;
     let pin = pins.get(key);
     if (isReset(pin, n)) { pins.delete(key); pin = undefined; } // new conversation in the same session
-    const { spend, limit } = budget();
+    const { spend, limit } = user && H.budget ? H.budget(user) : budget();
+    const blocked = !counting && user && H.gate?.(user, body.model);
+    if (blocked) {
+      log({ conv: key, user: user.id, requested: body.model, routed: null, reason: "blocked", status: 403, path: req.url, note: blocked });
+      return deny(res, 403, "permission_error", blocked);
+    }
     const beta = String(req.headers["anthropic-beta"] || "");
     let d = decide({
       requested: body.model, sub: isSubagent(body), boundary: isTurnBoundary(body),
@@ -301,6 +324,7 @@ function handle(req, res) {
       });
       if (ctxEditOff) d.ctxEdit = false;
     }
+    if (user && H.adjust) d = H.adjust(user, d, body.model, pin) || d;
     if (d.model !== body.model && rejected.has(`${d.model}|${beta}`)) d = { model: body.model, reason: `${d.reason} (skipped: rejected before)` };
 
     const requested = body.model;
@@ -333,7 +357,7 @@ function handle(req, res) {
       outBuf = Buffer.from(JSON.stringify(body));
     }
     const extraBeta = ourCtxEdit ? CTX_BETA : undefined;
-    const entry = { conv: key, requested, routed: d.model, reason: d.reason, stripped, path: req.url,
+    const entry = { conv: key, ...(user && { user: user.id }), requested, routed: d.model, reason: d.reason, stripped, path: req.url,
       ...(d.tier && { tier: d.tier }), ...(d.cls && { signals: d.cls.signals }), ...(extraBeta && { ctxEdit: true }),
       ...(CFG.policy === "smart" && { ccContextMgmt: JSON.stringify(JSON.parse(original.toString("utf8")).context_management ?? null).slice(0, 300) }) };
     let strippedRetry = false;
@@ -390,11 +414,12 @@ function handle(req, res) {
   });
 }
 
-export function start(port = CFG.port) {
+export function start(port = CFG.port, hooks = {}, host = "127.0.0.1") {
+  H = hooks;
   const server = http.createServer(handle);
-  server.listen(port, "127.0.0.1", () => {
+  server.listen(port, host, () => {
     const { limit } = budget();
-    console.error(`[token-saver proxy] http://127.0.0.1:${port} -> ${CFG.upstream} (experimental)`);
+    console.error(`[token-saver proxy] http://${host}:${port} -> ${CFG.upstream} (experimental)`);
     console.error(`  budget${CFG.ownBudget ? " (own ledger)" : ""}: ${limit ? `${limit}, switch to ${CFG.fallback} at ${Math.round(CFG.threshold * 100)}%` : "none set — budget failover inactive"}; subagents: ${CFG.subagents}; switch at: ${CFG.switchAt}`);
     console.error(`  log: ${CFG.log}`);
   });

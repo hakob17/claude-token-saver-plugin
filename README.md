@@ -169,6 +169,9 @@ ANTHROPIC_BASE_URL=http://127.0.0.1:8787 claude             # in another termina
 - Streams pass through unchanged. If the cheaper model rejects a rewritten request, the proxy resends the original (fails open). Usage is logged to `~/.claude/token-saver/proxy-log.jsonl`, and `http://127.0.0.1:8787/token-saver/status` shows its state.
 - Settings: `TOKEN_SAVER_PROXY_{PORT,UPSTREAM,FALLBACK,THRESHOLD,HARD,SUBAGENTS,SWITCH,MAX_SWITCH_CTX,LOG}`, documented in the design note. Offline test: `node plugins/token-saver/proxy/smoke-test.mjs`.
 
+### 5b. Team gateway and manager dashboard *(experimental)*
+Run the routing proxy once for a whole team. Each engineer gets a gateway key with a monthly limit and a rule for what happens at the limit: downgrade to Sonnet or block. A manager dashboard at `/admin` shows each engineer's spend, the models they used, how the router decided and how much routing saved. It's also where managers top up, lower or cap limits, disable access and rotate keys. Every change is kept in an audit trail. Setup and design: [bench/TEAM-GATEWAY.md](bench/TEAM-GATEWAY.md).
+
 ### 6. Status line *(Option B)*
 ```
 [Sonnet 5.5] $0.84 · ctx 45k · month $42.10/$100 (42%)
@@ -288,6 +291,10 @@ plugins/token-saver/
     lib.mjs                         shared helpers and thresholds
   proxy/router-proxy.mjs            experimental routing proxy (ANTHROPIC_BASE_URL), see bench/ROUTING-PROXY.md
   proxy/smoke-test.mjs              offline test with a fake upstream
+  proxy/smart-policy.mjs            smart routing policy (per-turn complexity classifier), see bench/SMART-ROUTER.md
+  team/gateway.mjs                  experimental team gateway + admin API, see bench/TEAM-GATEWAY.md
+  team/dashboard.html               manager dashboard (served at /admin)
+  team/store.mjs  team/seed-demo.mjs  team/team-test.mjs
   agents/   coder.md  grunt.md  scout.md
   commands/ handoff.md  resume.md  find.md  grunt.md  review-diff.md  budget.md  router.md
 install.mjs                         installer (settings, status line, budget, plugin)

@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Team AI Spend</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --raised: #ffffff;
+  --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+  --opus: #2a78d6; --sonnet: #eb6834; --haiku: #1baf7a; --bar: #2a78d6;
+  --good: #0ca30c; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b; --good-text: #006300;
+  --accent: #2a78d6; --accent-ink: #ffffff; --wash: rgba(42,120,214,0.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --raised: #222221;
+    --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --opus: #3987e5; --sonnet: #d95926; --haiku: #199e70; --bar: #3987e5;
+    --good-text: #0ca30c; --accent: #3987e5; --wash: rgba(57,135,229,0.12);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --raised: #222221;
+  --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+  --opus: #3987e5; --sonnet: #d95926; --haiku: #199e70; --bar: #3987e5;
+  --good-text: #0ca30c; --accent: #3987e5; --wash: rgba(57,135,229,0.12);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+button, input, select { font: inherit; color: inherit; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 20px 16px 48px; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 18px; }
+header h1 { font-size: 20px; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+header .sub { color: var(--muted); font-size: 13px; }
+header .spacer { flex: 1; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: none; padding: 6px 12px; cursor: pointer; color: var(--ink-2); }
+.seg button[aria-pressed="true"] { background: var(--wash); color: var(--ink); font-weight: 600; }
+.btn { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+.btn:hover { background: var(--wash); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.danger { color: var(--critical); }
+.btn:disabled { opacity: .5; cursor: default; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+.card h2 { font-size: 15px; margin: 0 0 2px; font-weight: 650; }
+.card .hint { color: var(--muted); font-size: 12.5px; margin: 0 0 12px; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
+.kpi .label { color: var(--ink-2); font-size: 12.5px; }
+.kpi .value { font-size: 26px; font-weight: 650; margin: 2px 0; letter-spacing: -0.02em; }
+.kpi .note { color: var(--muted); font-size: 12.5px; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; margin-bottom: 12px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-2); margin-bottom: 6px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+svg text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.tip { position: fixed; pointer-events: none; background: var(--raised); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; box-shadow: 0 6px 24px rgba(0,0,0,.12); z-index: 50; display: none; min-width: 150px; }
+.tip b { display: block; margin-bottom: 4px; }
+.tip .row { display: flex; justify-content: space-between; gap: 14px; color: var(--ink-2); }
+.tip .row span:last-child { color: var(--ink); font-variant-numeric: tabular-nums; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-weight: 600; color: var(--ink-2); font-size: 12px; padding: 8px 10px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+td { padding: 9px 10px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr.click { cursor: pointer; }
+tr.click:hover td { background: var(--wash); }
+.who { min-width: 130px; }
+.who b { display: block; font-weight: 600; }
+.who span { color: var(--muted); font-size: 12px; }
+.meter { width: 150px; }
+.meter .track { height: 6px; background: var(--grid); border-radius: 3px; overflow: hidden; }
+.meter .fill { height: 100%; border-radius: 3px; background: var(--good); }
+.meter .txt { font-size: 12px; color: var(--ink-2); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.mix { display: flex; gap: 2px; width: 120px; height: 8px; }
+.mix span { border-radius: 2px; }
+.badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); white-space: nowrap; }
+.badge .dot { width: 8px; height: 8px; border-radius: 50%; }
+.pill { font-size: 11.5px; color: var(--ink-2); border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; margin-right: 4px; white-space: nowrap; }
+.tablebar { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+.tablebar h2 { margin: 0; }
+.tablebar .spacer { flex: 1; }
+.scroll { overflow-x: auto; }
+.hbar { display: grid; grid-template-columns: minmax(130px, 1.3fr) 2fr 70px; gap: 8px; align-items: center; padding: 5px 0; font-size: 13px; }
+.hbar .name { color: var(--ink-2); }
+.hbar .bar { height: 10px; background: var(--bar); border-radius: 0 4px 4px 0; min-width: 2px; }
+.hbar .v { text-align: right; font-variant-numeric: tabular-nums; }
+.hbar:hover .name { color: var(--ink); }
+.audit li { padding: 6px 0; border-bottom: 1px solid var(--grid); font-size: 13px; list-style: none; }
+.audit { padding: 0; margin: 0; max-height: 280px; overflow: auto; }
+.audit time { color: var(--muted); font-size: 12px; margin-right: 6px; }
+/* drawer */
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.28); display: none; z-index: 20; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100vw); background: var(--surface); border-left: 1px solid var(--border); transform: translateX(100%); transition: transform .18s ease; z-index: 30; overflow-y: auto; padding: 20px 20px 40px; }
+.drawer.open { transform: none; }
+.drawer.open + .scrim, .scrim.show { display: block; }
+.drawer h3 { margin: 0; font-size: 18px; }
+.drawer section { border-top: 1px solid var(--grid); padding-top: 14px; margin-top: 14px; }
+.drawer h4 { margin: 0 0 8px; font-size: 13px; color: var(--ink-2); font-weight: 600; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--ink-2); }
+input[type=number], input[type=text], select { background: var(--raised); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; min-width: 0; }
+input[type=number] { width: 110px; }
+.radio { display: flex; gap: 6px; flex-wrap: wrap; }
+.radio label { border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; cursor: pointer; font-size: 13px; }
+.radio input { margin: 0 6px 0 0; }
+.radio label:has(input:checked) { background: var(--wash); border-color: var(--accent); }
+.close { float: right; }
+.small { font-size: 12px; color: var(--muted); }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; word-break: break-all; }
+.keybox { background: var(--raised); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin: 8px 0; }
+dialog { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--ink); padding: 20px; width: min(520px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgba(0,0,0,.3); }
+dialog form { display: grid; gap: 12px; }
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--page); padding: 8px 14px; border-radius: 8px; font-size: 13px; display: none; z-index: 60; }
+.login { max-width: 420px; margin: 12vh auto; }
+.err { color: var(--critical); font-size: 13px; }
+@media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .grid2 { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .kpi .value { font-size: 22px; } .hide-sm { display: none; } }
+</style>
+</head>
+<body>
+<div class="wrap" id="app" hidden>
+  <header>
+    <div>
+      <h1>Team AI spend</h1>
+      <div class="sub" id="sub">token-saver gateway</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="seg" role="group" aria-label="Period" id="period">
+      <button data-days="7">7 days</button><button data-days="30" aria-pressed="true">30 days</button><button data-days="90">90 days</button>
+    </div>
+    <button class="btn" id="refresh" title="Refresh">Refresh</button>
+    <button class="btn primary" id="addBtn">Add engineer</button>
+  </header>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid2">
+    <div class="card">
+      <h2>Daily spend by model</h2>
+      <p class="hint">What the team actually paid, at API list prices.</p>
+      <div class="legend" id="legend"></div>
+      <div id="daily"></div>
+      <details style="margin-top:8px"><summary class="small">Show as table</summary><div class="scroll" id="dailyTable"></div></details>
+    </div>
+    <div class="card">
+      <h2>How the router decided</h2>
+      <p class="hint">Requests by routing decision in the period. Hover for cost and savings.</p>
+      <div id="reasons"></div>
+      <div id="matrix" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:12px">
+    <div class="tablebar">
+      <h2>Engineers</h2>
+      <div class="spacer"></div>
+      <select id="teamFilter" aria-label="Team"><option value="">All teams</option></select>
+      <select id="sortBy" aria-label="Sort">
+        <option value="monthSpend">Sort: month spend</option>
+        <option value="usedPct">Sort: % of limit</option>
+        <option value="saved">Sort: saved by routing</option>
+        <option value="name">Sort: name</option>
+      </select>
+    </div>
+    <div class="scroll"><table id="engTable"></table></div>
+  </div>
+
+  <div class="card">
+    <h2>Manager actions</h2>
+    <p class="hint">Every limit change, top-up, cap and key rotation.</p>
+    <ul class="audit" id="audit"></ul>
+  </div>
+</div>
+
+<div class="login card" id="login" hidden>
+  <h2>Team AI spend</h2>
+  <p class="hint">Enter the gateway's admin token (TOKEN_SAVER_ADMIN_TOKEN). It's kept in this browser only.</p>
+  <form id="loginForm" class="row">
+    <input type="password" id="tokenInput" placeholder="Admin token" style="flex:1" autocomplete="off" required>
+    <button class="btn primary">Open</button>
+  </form>
+  <p class="err" id="loginErr"></p>
+</div>
+
+<aside class="drawer" id="drawer" aria-label="Engineer details"></aside>
+<div class="scrim" id="scrim"></div>
+
+<dialog id="addDlg">
+  <form method="dialog" id="addForm">
+    <h3 style="margin:0">Add engineer</h3>
+    <label class="field">Name<input type="text" name="name" required></label>
+    <label class="field">Team<input type="text" name="team"></label>
+    <label class="field">Monthly limit (USD, 0 = no limit)<input type="number" name="monthlyLimit" min="0" step="1" value="100"></label>
+    <div class="field">When the limit is reached
+      <div class="radio">
+        <label><input type="radio" name="overLimit" value="downgrade" checked>Downgrade to Sonnet</label>
+        <label><input type="radio" name="overLimit" value="block">Block</label>
+      </div>
+    </div>
+    <label class="field">Highest model allowed
+      <select name="modelCap"><option value="">Any (router decides)</option><option value="sonnet">Up to Sonnet</option><option value="haiku">Haiku only</option></select>
+    </label>
+    <p class="err" id="addErr"></p>
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Cancel</button><button class="btn primary" id="addSubmit" value="ok">Create</button></div>
+  </form>
+</dialog>
+
+<dialog id="keyDlg">
+  <h3 style="margin:0 0 6px">Gateway key for <span id="keyWho"></span></h3>
+  <p class="small">Shown once. Only a hash is stored; rotate the key if it's lost.</p>
+  <div class="keybox mono" id="keyVal"></div>
+  <p class="small" style="margin-bottom:4px">With the team's API key on the gateway:</p>
+  <div class="keybox mono" id="keySetup1"></div>
+  <p class="small" style="margin-bottom:4px">With the engineer's own Claude login:</p>
+  <div class="keybox mono" id="keySetup2"></div>
+  <div class="row" style="justify-content:flex-end"><button class="btn" id="copyKey">Copy key</button><button class="btn primary" onclick="this.closest('dialog').close()">Done</button></div>
+</dialog>
+
+<div class="tip" id="tip"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const usd = (v, d) => "$" + Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: d ?? (Math.abs(v) < 10 ? 2 : 0), maximumFractionDigits: d ?? (Math.abs(v) < 10 ? 2 : 0) });
+const int = (v) => Number(v || 0).toLocaleString();
+const MODELS = [["opus", "Opus"], ["sonnet", "Sonnet"], ["haiku", "Haiku"]];
+const STATE = {
+  ok: ["var(--good)", "✓", "Within limit"], "near limit": ["var(--warning)", "!", "Near limit"],
+  downgraded: ["var(--serious)", "↓", "Over limit: downgraded"], blocked: ["var(--critical)", "×", "Over limit: blocked"],
+  disabled: ["var(--muted)", "–", "Disabled"],
+};
+let token = ""; try { token = localStorage.getItem("ts-admin-token") || ""; } catch {}
+let days = 30, data = null, openId = null;
+
+async function api(path, method = "GET", body) {
+  const r = await fetch(path, { method, headers: { authorization: "Bearer " + token, "content-type": "application/json" }, ...(body && { body: JSON.stringify(body) }) });
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) { showLogin("That token wasn't accepted."); throw new Error("unauthorized"); }
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(t._h); t._h = setTimeout(() => (t.style.display = "none"), 2600); }
+function showLogin(err = "") { $("#app").hidden = true; $("#login").hidden = false; $("#loginErr").textContent = err; }
+$("#loginForm").onsubmit = (e) => { e.preventDefault(); token = $("#tokenInput").value.trim(); try { localStorage.setItem("ts-admin-token", token); } catch {} load(); };
+
+// ---------- tooltip ----------
+const tip = $("#tip");
+function showTip(e, html) { tip.innerHTML = html; tip.style.display = "block"; const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8), y = Math.min(e.clientY + 14, innerHeight - tip.offsetHeight - 8); tip.style.left = x + "px"; tip.style.top = y + "px"; }
+function hideTip() { tip.style.display = "none"; }
+const tipRows = (rows) => rows.map(([k, v]) => `<div class="row"><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join("");
+
+// ---------- charts ----------
+function niceMax(v) { if (v <= 0) return 1; const p = 10 ** Math.floor(Math.log10(v)); return Math.ceil(v / p / (v / p > 5 ? 2 : 1)) * p * (v / p > 5 ? 2 : 1); }
+function stackedBars(el, rows, { height = 220 } = {}) {
+  const W = Math.max(320, el.clientWidth || 600), H = height, L = 44, R = 8, T = 8, B = 24;
+  const max = niceMax(Math.max(...rows.map((r) => r.cost), 0.01));
+  const bw = (W - L - R) / rows.length, gap = Math.min(4, bw * 0.25), w = Math.max(1, bw - gap);
+  const y = (v) => T + (H - T - B) * (1 - v / max);
+  let s = `<svg width="${W}" height="${H}" role="img" aria-label="Daily spend stacked by model">`;
+  for (let i = 0; i <= 4; i++) { const v = (max / 4) * i, yy = y(v); s += `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" stroke="var(--grid)" stroke-width="1"/><text x="${L - 6}" y="${yy + 4}" text-anchor="end">${usd(v, Number.isInteger(v) ? 0 : 2)}</text>`; }
+  const every = Math.ceil(rows.length / 8);
+  rows.forEach((r, i) => {
+    const x = L + i * bw + gap / 2; let acc = 0;
+    const segs = MODELS.filter(([m]) => r.byModel[m] > 0);
+    segs.forEach(([m], k) => {
+      const v = r.byModel[m], y0 = y(acc), y1 = y(acc + v); acc += v;
+      const top = k === segs.length - 1, h = Math.max(0, y0 - y1 - (top ? 0 : 2));
+      if (h <= 0) return;
+      const rr = top ? Math.min(4, w / 2, h) : 0;
+      s += rr ? `<path d="M${x},${y0} V${y1 + rr} Q${x},${y1} ${x + rr},${y1} H${x + w - rr} Q${x + w},${y1} ${x + w},${y1 + rr} V${y0} Z" fill="var(--${m})"/>` : `<rect x="${x}" y="${y1 + (top ? 0 : 2)}" width="${w}" height="${h}" fill="var(--${m})"/>`;
+    });
+    s += `<rect class="hit" data-i="${i}" x="${L + i * bw}" y="${T}" width="${bw}" height="${H - T - B}" fill="transparent"/>`;
+    if ((i % every === 0 && rows.length - 1 - i >= every / 2) || i === rows.length - 1) s += `<text x="${x + w / 2}" y="${H - 6}" text-anchor="middle">${r.date.slice(5)}</text>`;
+  });
+  s += `<line x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}" stroke="var(--axis)"/></svg>`;
+  el.innerHTML = s;
+  el.querySelectorAll(".hit").forEach((h) => {
+    h.onmousemove = (e) => { const r = rows[h.dataset.i]; showTip(e, `<b>${esc(new Date(r.date + "T12:00:00Z").toDateString())}</b>` + tipRows([...MODELS.map(([m, n]) => [n, usd(r.byModel[m] || 0, 2)]), ["Total", usd(r.cost, 2)]])); h.setAttribute("fill", "var(--wash)"); };
+    h.onmouseleave = () => { hideTip(); h.setAttribute("fill", "transparent"); };
+  });
+}
+function legend() { return MODELS.map(([m, n]) => `<span><i style="background:var(--${m})"></i>${n}</span>`).join(""); }
+function mixBar(byModel) {
+  const tot = MODELS.reduce((s, [m]) => s + (byModel[m]?.requests || 0), 0);
+  if (!tot) return `<span class="small">no requests</span>`;
+  const title = MODELS.map(([m, n]) => `${n} ${Math.round(((byModel[m]?.requests || 0) / tot) * 100)}%`).join(", ");
+  return `<div class="mix" title="${title}" aria-label="Requests by model: ${title}">${MODELS.map(([m]) => { const p = ((byModel[m]?.requests || 0) / tot) * 100; return p ? `<span style="flex:${p};background:var(--${m})"></span>` : ""; }).join("")}</div>`;
+}
+function badge(state) { const [c, icon, label] = STATE[state] || STATE.ok; return `<span class="badge"><span class="dot" style="background:${c}"></span><span aria-hidden="true">${icon}</span>${label}</span>`; }
+function meter(e) {
+  if (!(e.effectiveLimit > 0)) return `<div class="meter"><div class="txt">${usd(e.monthSpend, 2)} · no limit</div></div>`;
+  const p = Math.min(100, (e.monthSpend / e.effectiveLimit) * 100);
+  const c = e.usedPct >= 100 ? (e.overLimit === "block" ? "var(--critical)" : "var(--serious)") : e.usedPct >= 80 ? "var(--warning)" : "var(--good)";
+  return `<div class="meter"><div class="track"><div class="fill" style="width:${p}%;background:${c}"></div></div><div class="txt">${usd(e.monthSpend, 2)} of ${usd(e.effectiveLimit)}${e.credits ? ` <span class="small">(incl. ${usd(e.credits)} top-up)</span>` : ""}</div></div>`;
+}
+const rule = (e) => `<span class="pill">${e.overLimit === "block" ? "Block at limit" : "Downgrade at limit"}</span>${e.modelCap ? `<span class="pill">Cap: ${e.modelCap === "haiku" ? "Haiku" : "Sonnet"}</span>` : ""}`;
+const ago = (ts) => { if (!ts) return "—"; const m = (Date.now() - Date.parse(ts)) / 60000; return m < 60 ? `${Math.max(1, Math.round(m))} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
+
+// ---------- page ----------
+async function load() {
+  try { data = await api(`/admin/api/overview?days=${days}`); } catch (e) { if (e.message !== "unauthorized") toast(e.message); return; }
+  $("#login").hidden = true; $("#app").hidden = false;
+  render();
+  if (openId) openDrawer(openId, true);
+}
+function render() {
+  const t = data.totals, eng = data.engineers;
+  const over = eng.filter((e) => e.state === "downgraded" || e.state === "blocked").length, near = eng.filter((e) => e.state === "near limit").length;
+  $("#sub").textContent = `${eng.length} engineers · month to date since ${data.monthStart} · period: last ${data.days} days`;
+  $("#kpis").innerHTML = [
+    ["Spend this month", usd(t.monthSpend), t.monthLimit ? `of ${usd(t.monthLimit)} in limits (${Math.round((t.monthSpend / t.monthLimit) * 100)}%)` : "no limits set"],
+    [`Saved by routing (${data.days} d)`, usd(t.saved), t.wouldCost ? `${Math.round((t.saved / t.wouldCost) * 100)}% less than all on the requested model` : "—"],
+    [`Requests (${data.days} d)`, int(t.requests), `${t.requests ? Math.round((t.rerouted / t.requests) * 100) : 0}% sent to a cheaper model`],
+    ["Need attention", String(over + near), `${over} over limit · ${near} near limit · ${int(t.blocked)} requests blocked`],
+  ].map(([l, v, n]) => `<div class="card kpi"><div class="label">${l}</div><div class="value">${v}</div><div class="note">${n}</div></div>`).join("");
+
+  $("#legend").innerHTML = legend();
+  stackedBars($("#daily"), data.daily);
+  $("#dailyTable").innerHTML = `<table><tr><th>Date</th>${MODELS.map(([, n]) => `<th class="num">${n}</th>`).join("")}<th class="num">Total</th></tr>${data.daily.slice().reverse().map((r) => `<tr><td>${r.date}</td>${MODELS.map(([m]) => `<td class="num">${usd(r.byModel[m] || 0, 2)}</td>`).join("")}<td class="num">${usd(r.cost, 2)}</td></tr>`).join("")}</table>`;
+
+  const cats = Object.entries(data.routing.categories).sort((a, b) => b[1].requests - a[1].requests);
+  const cmax = Math.max(1, ...cats.map(([, c]) => c.requests));
+  $("#reasons").innerHTML = cats.map(([k, c], i) => `<div class="hbar" data-i="${i}"><span class="name">${esc(k)}</span><span><div class="bar" style="width:${(c.requests / cmax) * 100}%"></div></span><span class="v">${int(c.requests)}</span></div>`).join("") || `<p class="small">No requests in this period.</p>`;
+  $("#reasons").querySelectorAll(".hbar").forEach((row) => {
+    const [k, c] = cats[row.dataset.i];
+    row.onmousemove = (e) => showTip(e, `<b>${esc(k)}</b>` + tipRows([["Requests", int(c.requests)], ["Cost", usd(c.cost, 2)], ["On requested model", usd(c.wouldCost, 2)], ["Saved", usd(Math.max(0, c.wouldCost - c.cost), 2)]]));
+    row.onmouseleave = hideTip;
+  });
+  const mx = data.routing.matrix, req = [...new Set(Object.keys(mx).map((k) => k.split("→")[0]))];
+  $("#matrix").innerHTML = req.length ? `<table><caption class="small" style="text-align:left;caption-side:top;padding-bottom:4px">Requests by model asked for (rows) and model that answered (columns)</caption><tr><th>Asked</th>${MODELS.map(([, n]) => `<th class="num">${n}</th>`).join("")}</tr>${req.map((r) => `<tr><td>${esc(r[0].toUpperCase() + r.slice(1))}</td>${MODELS.map(([m]) => `<td class="num">${int(mx[`${r}→${m}`] || 0)}</td>`).join("")}</tr>`).join("")}</table>` : "";
+
+  const teams = [...new Set(eng.map((e) => e.team).filter(Boolean))].sort();
+  const tf = $("#teamFilter"), cur = tf.value;
+  tf.innerHTML = `<option value="">All teams</option>` + teams.map((t) => `<option ${t === cur ? "selected" : ""}>${esc(t)}</option>`).join("");
+  renderTable();
+  api("/admin/api/audit").then((a) => { $("#audit").innerHTML = a.slice(0, 60).map(auditLine).join("") || `<li class="small">No changes yet.</li>`; }).catch(() => {});
+}
+function renderTable() {
+  const team = $("#teamFilter").value, by = $("#sortBy").value;
+  const rows = data.engineers.filter((e) => !team || e.team === team).sort((a, b) =>
+    by === "name" ? a.name.localeCompare(b.name) : by === "saved" ? b.period.saved - a.period.saved : by === "usedPct" ? (b.usedPct ?? -1) - (a.usedPct ?? -1) : b.monthSpend - a.monthSpend);
+  $("#engTable").innerHTML = `<tr><th>Engineer</th><th>This month</th><th>Status</th><th class="hide-sm">Models used (${data.days} d)</th><th class="num hide-sm">Rerouted</th><th class="num">Saved</th><th class="hide-sm">Rules</th><th class="hide-sm">Last active</th></tr>` +
+    rows.map((e) => `<tr class="click" data-id="${esc(e.id)}" tabindex="0"><td class="who"><b>${esc(e.name)}</b><span>${esc(e.team || "—")}</span></td><td>${meter(e)}</td><td>${badge(e.state)}</td><td class="hide-sm">${mixBar(e.period.byModel)}</td><td class="num hide-sm">${e.period.requests ? Math.round((e.period.rerouted / e.period.requests) * 100) + "%" : "—"}</td><td class="num">${usd(e.period.saved)}</td><td class="hide-sm">${rule(e)}</td><td class="hide-sm small">${ago(e.lastSeen)}</td></tr>`).join("");
+  $("#engTable").querySelectorAll("tr.click").forEach((tr) => { tr.onclick = () => openDrawer(tr.dataset.id); tr.onkeydown = (e) => { if (e.key === "Enter") openDrawer(tr.dataset.id); }; });
+}
+function auditLine(a) {
+  const who = data?.engineers.find((e) => e.id === a.engineer)?.name || a.engineer;
+  const f = (k, v) => k === "monthlyLimit" ? (v ? usd(v) : "no limit") : k === "modelCap" ? (v ? `up to ${v}` : "no cap") : k === "active" ? (v ? "enabled" : "disabled") : k === "overLimit" ? (v === "block" ? "block at limit" : "downgrade at limit") : v;
+  const label = { monthlyLimit: "limit", modelCap: "model cap", active: "access", overLimit: "rule", name: "name", team: "team" };
+  let what = a.action === "credit" ? `${a.amount > 0 ? "topped up" : "reduced"} by ${usd(Math.abs(a.amount))}`
+    : a.action === "create" ? "added" : a.action === "rotate-key" ? "key rotated"
+    : Object.keys(a.to || {}).map((k) => `${label[k] || k}: ${f(k, a.from?.[k])} → ${f(k, a.to[k])}`).join(", ");
+  return `<li><time>${esc(new Date(a.at).toLocaleString())}</time><b>${esc(who)}</b> — ${esc(what)}${a.note ? ` <span class="small">“${esc(a.note)}”</span>` : ""}</li>`;
+}
+
+// ---------- engineer drawer ----------
+const drawer = $("#drawer"), scrim = $("#scrim");
+function closeDrawer() { drawer.classList.remove("open"); scrim.classList.remove("show"); openId = null; }
+scrim.onclick = closeDrawer;
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && openId) closeDrawer(); });
+async function openDrawer(id, quiet) {
+  openId = id;
+  let d; try { d = await api(`/admin/api/engineers/${id}?days=${days}`); } catch (e) { return toast(e.message); }
+  renderDrawer(d);
+  if (!quiet) { drawer.classList.add("open"); scrim.classList.add("show"); drawer.scrollTop = 0; }
+}
+function renderDrawer(d) {
+  const e = d.engineer;
+  const cats = Object.entries(d.categories).sort((a, b) => b[1] - a[1]);
+  const cmax = Math.max(1, ...cats.map(([, n]) => n));
+  drawer.innerHTML = `
+    <button class="btn close" id="dClose" aria-label="Close">Close</button>
+    <h3>${esc(e.name)}</h3>
+    <div class="small">${esc(e.team || "No team")} · key …${esc(e.keyHint)} · added ${esc(e.createdAt.slice(0, 10))}</div>
+    <div style="margin:12px 0 4px" class="row">${badge(e.state)} ${rule(e)}</div>
+    <div style="margin-top:8px">${meter(e).replace('class="meter"', 'class="meter" style="width:100%"')}</div>
+
+    <section>
+      <h4>Top up this month</h4>
+      <div class="row">
+        <button class="btn" data-credit="10">+ $10</button><button class="btn" data-credit="25">+ $25</button><button class="btn" data-credit="50">+ $50</button>
+        <input type="number" id="cAmt" placeholder="Amount" step="1"><input type="text" id="cNote" placeholder="Reason (optional)" style="flex:1;min-width:120px">
+        <button class="btn primary" id="cGo">Add</button>
+      </div>
+      <p class="small">Top-ups raise this month's limit only. A negative amount takes budget away.</p>
+    </section>
+
+    <section>
+      <h4>Limits and rules</h4>
+      <div class="row" style="align-items:flex-end">
+        <label class="field">Monthly limit (USD, 0 = none)<input type="number" id="lim" min="0" step="1" value="${e.monthlyLimit}"></label>
+        <button class="btn" id="limGo">Save limit</button>
+      </div>
+      <div class="field" style="margin-top:10px">When the limit is reached
+        <div class="radio" id="ruleRadio">
+          <label><input type="radio" name="ol" value="downgrade" ${e.overLimit === "downgrade" ? "checked" : ""}>Downgrade to Sonnet</label>
+          <label><input type="radio" name="ol" value="block" ${e.overLimit === "block" ? "checked" : ""}>Block requests</label>
+        </div>
+      </div>
+      <div class="field" style="margin-top:10px">Highest model allowed
+        <div class="radio" id="capRadio">
+          <label><input type="radio" name="cap" value="" ${!e.modelCap ? "checked" : ""}>Any (router decides)</label>
+          <label><input type="radio" name="cap" value="sonnet" ${e.modelCap === "sonnet" ? "checked" : ""}>Up to Sonnet</label>
+          <label><input type="radio" name="cap" value="haiku" ${e.modelCap === "haiku" ? "checked" : ""}>Haiku only</label>
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn ${e.active ? "danger" : ""}" id="actGo">${e.active ? "Disable access" : "Enable access"}</button>
+        <button class="btn" id="keyGo">Rotate key</button>
+      </div>
+    </section>
+
+    <section>
+      <h4>Daily spend, last ${days} days</h4>
+      <div class="legend">${legend()}</div>
+      <div id="dDaily"></div>
+      <div class="small">${int(e.period.requests)} requests in ${int(d.conversations)} conversations · ${usd(e.period.cost, 2)} spent · ${usd(e.period.saved, 2)} saved by routing</div>
+    </section>
+
+    <section>
+      <h4>Router decisions</h4>
+      ${cats.map(([k, n]) => `<div class="hbar"><span class="name">${esc(k)}</span><span><div class="bar" style="width:${(n / cmax) * 100}%"></div></span><span class="v">${int(n)}</span></div>`).join("") || `<p class="small">No requests yet.</p>`}
+    </section>
+
+    <section>
+      <h4>Recent requests</h4>
+      <div class="scroll"><table><tr><th>When</th><th>Asked → ran on</th><th>Why</th><th class="num">Cost</th></tr>
+      ${d.recent.slice(0, 25).map((r) => `<tr><td class="small">${esc(new Date(r.ts).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }))}</td><td>${esc(short(r.requested))} → ${r.model ? esc(short(r.model)) : "<b>blocked</b>"}</td><td class="small">${esc(r.category)}</td><td class="num">${usd(r.cost, 3)}</td></tr>`).join("")}
+      </table></div>
+    </section>
+
+    <section>
+      <h4>History</h4>
+      <ul class="audit">${d.audit.map(auditLine).join("") || `<li class="small">No changes yet.</li>`}</ul>
+    </section>`;
+  stackedBars($("#dDaily"), d.daily, { height: 150 });
+  $("#dClose").onclick = closeDrawer;
+  const act = async (fn, msg) => { try { const nd = await fn(); if (nd?.engineer) renderDrawer(nd); toast(msg); await load(); } catch (err) { toast(err.message); } };
+  drawer.querySelectorAll("[data-credit]").forEach((b) => b.onclick = () => act(() => api(`/admin/api/engineers/${e.id}/credit`, "POST", { amount: Number(b.dataset.credit), note: $("#cNote").value }), `Added ${usd(Number(b.dataset.credit))} for ${e.name}`));
+  $("#cGo").onclick = () => { const a = Number($("#cAmt").value); if (!a) return toast("Enter an amount"); act(() => api(`/admin/api/engineers/${e.id}/credit`, "POST", { amount: a, note: $("#cNote").value }), `${a > 0 ? "Added" : "Removed"} ${usd(Math.abs(a))} for ${e.name}`); };
+  $("#limGo").onclick = () => act(() => api(`/admin/api/engineers/${e.id}`, "PATCH", { monthlyLimit: Number($("#lim").value) }), "Limit saved");
+  drawer.querySelectorAll("input[name=ol]").forEach((r) => r.onchange = () => act(() => api(`/admin/api/engineers/${e.id}`, "PATCH", { overLimit: r.value }), "Rule saved"));
+  drawer.querySelectorAll("input[name=cap]").forEach((r) => r.onchange = () => act(() => api(`/admin/api/engineers/${e.id}`, "PATCH", { modelCap: r.value || null }), "Model cap saved"));
+  $("#actGo").onclick = () => { if (e.active && !confirm(`Disable gateway access for ${e.name}? Their requests will be refused until re-enabled.`)) return; act(() => api(`/admin/api/engineers/${e.id}`, "PATCH", { active: !e.active }), e.active ? "Access disabled" : "Access enabled"); };
+  $("#keyGo").onclick = async () => { if (!confirm(`Rotate ${e.name}'s key? The old key stops working immediately.`)) return; try { const { key } = await api(`/admin/api/engineers/${e.id}/rotate-key`, "POST"); showKey(e.name, key); load(); } catch (err) { toast(err.message); } };
+}
+const short = (m = "") => m.replace("claude-", "").replace(/-(\d)-(\d)$/, " $1.$2").replace(/-(\d)$/, " $1");
+
+// ---------- add engineer ----------
+$("#addBtn").onclick = () => { $("#addForm").reset(); $("#addErr").textContent = ""; $("#addDlg").showModal(); };
+$("#addForm").onsubmit = async (ev) => {
+  if (ev.submitter?.value !== "ok") return;
+  ev.preventDefault();
+  const f = new FormData(ev.target);
+  try {
+    const r = await api("/admin/api/engineers", "POST", { name: f.get("name"), team: f.get("team"), monthlyLimit: Number(f.get("monthlyLimit")), overLimit: f.get("overLimit"), modelCap: f.get("modelCap") || null });
+    $("#addDlg").close(); showKey(f.get("name"), r.key); load();
+  } catch (e) { $("#addErr").textContent = e.message; }
+};
+function showKey(name, key) {
+  const origin = location.origin;
+  $("#keyWho").textContent = name; $("#keyVal").textContent = key;
+  $("#keySetup1").textContent = `ANTHROPIC_BASE_URL=${origin} ANTHROPIC_API_KEY=${key} claude`;
+  $("#keySetup2").textContent = `ANTHROPIC_BASE_URL=${origin} ANTHROPIC_CUSTOM_HEADERS="x-token-saver-key: ${key}" claude`;
+  $("#copyKey").onclick = () => navigator.clipboard?.writeText(key).then(() => toast("Key copied"));
+  $("#keyDlg").showModal();
+}
+
+// ---------- controls ----------
+$("#period").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; days = Number(b.dataset.days); $("#period").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b)); load(); };
+$("#refresh").onclick = () => load().then(() => toast("Updated"));
+$("#teamFilter").onchange = renderTable; $("#sortBy").onchange = renderTable;
+let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => data && stackedBars($("#daily"), data.daily), 150); });
+setInterval(() => { if (!document.hidden && token && !openId) load(); }, 30000);
+token ? load() : showLogin();
+</script>
+</body>
+</html>
