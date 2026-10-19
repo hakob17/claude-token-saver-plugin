@@ -170,7 +170,7 @@ ANTHROPIC_BASE_URL=http://127.0.0.1:8787 claude             # in another termina
 - Settings: `TOKEN_SAVER_PROXY_{PORT,UPSTREAM,FALLBACK,THRESHOLD,HARD,SUBAGENTS,SWITCH,MAX_SWITCH_CTX,LOG}`, documented in the design note. Offline test: `node plugins/token-saver/proxy/smoke-test.mjs`.
 
 ### 5b. Team gateway and manager dashboard *(experimental)*
-Run the routing proxy once for a whole team. Each engineer gets a gateway key with a monthly limit and a rule for what happens at the limit: downgrade to Sonnet or block. A manager dashboard at `/admin` shows each engineer's spend, the models they used, how the router decided and how much routing saved. It's also where managers top up, lower or cap limits, disable access and rotate keys. Every change is kept in an audit trail. Setup and design: [bench/TEAM-GATEWAY.md](bench/TEAM-GATEWAY.md).
+Run the routing proxy once for a whole team. Each engineer gets a gateway key with a monthly limit and a rule for what happens at the limit: downgrade to Sonnet or block. A manager dashboard at `/admin` shows each engineer's spend, the models they used, how the router decided and how much routing saved. It's also where managers top up, lower or cap limits, disable access and rotate keys. Every change is kept in an audit trail. After a costly turn, the plugin can also show an engineer a short private hint about the prompt, such as naming the file or saying how to check the result. Only the prompt's shape is recorded, never its text. Setup and design: [bench/TEAM-GATEWAY.md](bench/TEAM-GATEWAY.md).
 
 ### 6. Status line *(Option B)*
 ```
@@ -287,6 +287,7 @@ plugins/token-saver/
     statusline.mjs                  status line (model, cost, context, month total)
     budget-lib.mjs                  monthly spend ledger shared by status line and hook
     budget-watch.mjs                budget warnings at 50/80/95/100%
+    prompt-hint.mjs                 Stop hook: shows the team gateway's prompt hint after a costly turn
     model-switch.mjs                tracks /model changes
     lib.mjs                         shared helpers and thresholds
   proxy/router-proxy.mjs            experimental routing proxy (ANTHROPIC_BASE_URL), see bench/ROUTING-PROXY.md
@@ -294,6 +295,7 @@ plugins/token-saver/
   proxy/smart-policy.mjs            smart routing policy (per-turn complexity classifier), see bench/SMART-ROUTER.md
   team/gateway.mjs                  experimental team gateway + admin API, see bench/TEAM-GATEWAY.md
   team/dashboard.html               manager dashboard (served at /admin)
+  team/prompt-hints.mjs             prompt-shape signals and hint rules
   team/store.mjs  team/seed-demo.mjs  team/team-test.mjs
   agents/   coder.md  grunt.md  scout.md
   commands/ handoff.md  resume.md  find.md  grunt.md  review-diff.md  budget.md  router.md

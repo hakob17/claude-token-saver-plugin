@@ -74,6 +74,17 @@ store.credit("ben-ortiz", 50, "release week", "seed");
 store.update("dana-kim", { monthlyLimit: 80, note: "lowered after a runaway agent loop" }, "seed");
 store.update("hana-sato", { modelCap: "haiku", note: "docs and data questions only" }, "seed");
 store.events.sort((a, b) => a.ts.localeCompare(b.ts));
+// Turns (prompt shape + cost): one per conversation; costlier turns are more likely to miss a pattern.
+const convs = new Map();
+for (const e of store.events) if (e.reason !== "blocked") { const k = `${e.user}|${e.conv}`; const c = convs.get(k) || { ts: e.ts, user: e.user, session: e.conv, cost: 0, requests: 0 }; c.cost += e.cost; c.requests++; convs.set(k, c); }
+const turnLines = [];
+for (const c of convs.values()) {
+  const q = c.requests < 3, p = Math.min(0.8, c.cost / 6);
+  const t = { ...c, cost: Math.round(c.cost * 10000) / 10000, len: q ? 40 + Math.round(rnd() * 80) : 60 + Math.round(rnd() * 900), tier: q ? "simple" : rnd() < 0.3 ? "hard" : "standard",
+    files: rnd() > p, symbols: rnd() > p + 0.2, check: rnd() > p + 0.1, vague: rnd() < p * 0.4, broad: rnd() < p * 0.35, correction: rnd() < 0.08, question: q, errors: Math.round(rnd() * p * 5), hinted: false };
+  turnLines.push(t);
+}
+fs.writeFileSync(path.join(dir, "turns.jsonl"), turnLines.map((t) => JSON.stringify(t)).join("\n") + "\n");
 fs.writeFileSync(path.join(dir, "usage.jsonl"), store.events.map((e) => JSON.stringify(e)).join("\n") + "\n");
 console.log(`demo team written to ${dir}: ${ids.length} engineers, ${store.events.length} requests`);
 console.log(JSON.stringify(keys, null, 2));

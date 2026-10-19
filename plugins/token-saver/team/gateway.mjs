@@ -14,6 +14,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { openStore } from "./store.mjs";
+import { promptSignals, hintFor, patternStats, HINTS } from "./prompt-hints.mjs";
 
 const env = process.env;
 export const TEAM = {
@@ -61,8 +62,50 @@ export function gatewayHooks(store, team = TEAM) {
     const t = String(req.headers.authorization || "").replace(/^Bearer\s+/i, "");
     return team.adminToken && t.length === team.adminToken.length && crypto.timingSafeEqual(Buffer.from(t), Buffer.from(team.adminToken));
   };
+  // Turns: one open turn per engineer and session, closed when the next user message arrives.
+  const open = new Map(); // "user|session" -> turn
+  const lastHint = new Map(); // user -> number of finished turns when the last hint was given
+  const sessionOfKey = (key) => String(key).split("|").slice(1).join("|").split(":")[0];
+  const close = (k, corrected) => {
+    const t = open.get(k);
+    if (!t) return;
+    open.delete(k);
+    store.recordTurn({ ...t, cost: round(t.cost), corrected: !!corrected });
+  };
+  const hint = (u, session) => {
+    if (u.hints === false) return null;
+    const t = open.get(`${u.id}|${session}`);
+    const done = store.turns.filter((x) => x.user === u.id).length;
+    if (lastHint.has(u.id) && done - lastHint.get(u.id) < HINTS.cooldownTurns) return null;
+    const since = new Date(Date.now() - 30 * DAY).toISOString();
+    const h = hintFor(t, store.turns.filter((x) => x.ts >= since));
+    if (!h) return null;
+    t.hinted = h.rule; lastHint.set(u.id, done);
+    return h.text;
+  };
   return {
-    route: (req, res) => adminRoute(req, res, store, isAdmin),
+    route(req, res) {
+      if (req.method === "GET" && req.url.startsWith("/token-saver/hint")) {
+        const u = userOf(req);
+        if (!u) { send(res, 401, { error: "unknown key" }); return true; }
+        const session = new URL(req.url, "http://x").searchParams.get("session") || "";
+        send(res, 200, { hint: u.active ? hint(u, session) : null });
+        return true;
+      }
+      return adminRoute(req, res, store, isAdmin);
+    },
+    onRequest(u, body, info) {
+      if (info.counting) return;
+      const k = `${u.id}|${sessionOfKey(info.key)}`;
+      if (info.boundary && !info.sub && !info.aux) {
+        const sig = promptSignals(body, info.tier);
+        close(k, sig.correction);
+        open.set(k, { ts: new Date().toISOString(), user: u.id, session: sessionOfKey(info.key), ...sig, cost: 0, requests: 0, errors: 0, hinted: false });
+        return;
+      }
+      const t = open.get(k), last = body.messages?.filter((m) => m?.role !== "system").at(-1);
+      if (t && Array.isArray(last?.content)) t.errors += last.content.filter((b) => b?.type === "tool_result" && b.is_error).length;
+    },
     identify: userOf,
     budget: (u) => ({ spend: store.monthSpend(u.id), limit: store.effectiveLimit(u.id) }),
     gate(u) {
@@ -85,6 +128,8 @@ export function gatewayHooks(store, team = TEAM) {
     },
     onLog(e) {
       if (!e.user) return;
+      const t = open.get(`${e.user}|${sessionOfKey(e.conv)}`);
+      if (t && e.status === 200 && e.usage?.model) { t.cost += e.cost || 0; t.requests++; }
       const blocked = e.reason === "blocked";
       if (!blocked && !(e.status === 200 && e.usage?.model)) return;
       const u = e.usage || {};
@@ -152,6 +197,7 @@ export function overview(store, { days = 30, now = Date.now() } = {}) {
     days, since, monthStart: new Date(Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), 1)).toISOString().slice(0, 10),
     totals: { ...sum(ev), monthSpend: round(engineers.reduce((s, e) => s + e.monthSpend, 0)), monthLimit: round(engineers.reduce((s, e) => s + e.effectiveLimit, 0)) },
     daily: daily(ev, days, now), engineers, routing: { categories: cats, matrix },
+    prompts: { turns: store.turns.filter((t) => t.ts >= since).length, patterns: patternStats(store.turns.filter((t) => t.ts >= since)) },
   };
 }
 export function engineerDetail(store, id, { days = 30, now = Date.now() } = {}) {

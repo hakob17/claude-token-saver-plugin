@@ -187,7 +187,7 @@ let ownSpend = 0;
 // Optional hooks for a multi-user gateway (see ../team/gateway.mjs). All optional:
 //   route(req, res) -> true if handled; identify(req) -> user | null (null = 401);
 //   budget(user) -> { spend, limit }; adjust(user, d, requested, pin) -> d; gate(user, requested) -> error text | null;
-//   headers(headers, req, user) -> mutate outgoing headers; onLog(entry).
+//   headers(headers, req, user) -> mutate outgoing headers; onRequest(user, body, info) -> observe; onLog(entry).
 let H = {};
 
 let spendCache = { at: 0, spend: 0, limit: 0 };
@@ -328,6 +328,9 @@ function handle(req, res) {
     if (d.model !== body.model && rejected.has(`${d.model}|${beta}`)) d = { model: body.model, reason: `${d.reason} (skipped: rejected before)` };
 
     const requested = body.model;
+    if (user && H.onRequest) try {
+      H.onRequest(user, body, { key, counting, sub: isSubagent(body), aux: !(Array.isArray(body.tools) && body.tools.length), boundary: isTurnBoundary(body) || (!pin && n <= 1), tier: d.tier });
+    } catch {}
     let switchIndex = pin?.switchIndex;
     if (!counting) {
       // Budget policy strips old thinking at a switch. Smart policy doesn't: other models ignore

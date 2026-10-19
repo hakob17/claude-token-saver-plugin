@@ -172,6 +172,12 @@ dialog form { display: grid; gap: 12px; }
     <div class="scroll"><table id="engTable"></table></div>
   </div>
 
+  <div class="card" style="margin-bottom:12px">
+    <h2>Prompt patterns</h2>
+    <p class="hint" id="promptHint">Average cost of work turns that follow each prompting pattern, across the team. Only the shape of each prompt is recorded, never its text. Engineers get these as private hints after costly turns.</p>
+    <div class="scroll" id="patterns"></div>
+  </div>
+
   <div class="card">
     <h2>Manager actions</h2>
     <p class="hint">Every limit change, top-up, cap and key rotation.</p>
@@ -341,6 +347,7 @@ function render() {
   const tf = $("#teamFilter"), cur = tf.value;
   tf.innerHTML = `<option value="">All teams</option>` + teams.map((t) => `<option ${t === cur ? "selected" : ""}>${esc(t)}</option>`).join("");
   renderTable();
+  renderPatterns();
   api("/admin/api/audit").then((a) => { $("#audit").innerHTML = a.slice(0, 60).map(auditLine).join("") || `<li class="small">No changes yet.</li>`; }).catch(() => {});
 }
 function renderTable() {
@@ -351,10 +358,17 @@ function renderTable() {
     rows.map((e) => `<tr class="click" data-id="${esc(e.id)}" tabindex="0"><td class="who"><b>${esc(e.name)}</b><span>${esc(e.team || "—")}</span></td><td>${meter(e)}</td><td>${badge(e.state)}</td><td class="hide-sm">${mixBar(e.period.byModel)}</td><td class="num hide-sm">${e.period.requests ? Math.round((e.period.rerouted / e.period.requests) * 100) + "%" : "—"}</td><td class="num">${usd(e.period.saved)}</td><td class="hide-sm">${rule(e)}</td><td class="hide-sm small">${ago(e.lastSeen)}</td></tr>`).join("");
   $("#engTable").querySelectorAll("tr.click").forEach((tr) => { tr.onclick = () => openDrawer(tr.dataset.id); tr.onkeydown = (e) => { if (e.key === "Enter") openDrawer(tr.dataset.id); }; });
 }
+const PATTERN = { broad: "Splits big requests into steps", target: "Names the file or function", check: "Says how to check the result", vague: "Avoids vague wording" };
+function renderPatterns() {
+  const p = data.prompts || { turns: 0, patterns: [] };
+  if (!p.turns) { $("#patterns").innerHTML = `<p class="small">No turns recorded yet. Turns are counted as engineers work through the gateway.</p>`; return; }
+  $("#patterns").innerHTML = `<table><tr><th>Pattern</th><th class="num">Turns that did</th><th class="num">Avg cost</th><th class="num">Turns that didn't</th><th class="num">Avg cost</th><th class="num">Spent in turns that didn't</th></tr>${
+    p.patterns.map((x) => `<tr><td title="${esc(x.tip)}">${esc(PATTERN[x.id] || x.id)}</td><td class="num">${int(x.did)}</td><td class="num">${x.avgWith == null ? "—" : usd(x.avgWith, 2)}</td><td class="num">${int(x.didnt)}</td><td class="num">${x.avgWithout == null ? "—" : usd(x.avgWithout, 2)}</td><td class="num">${usd(x.costWithout, 2)}</td></tr>`).join("")}</table><p class="small">${int(p.turns)} work and question turns in the period. Hover a pattern for the hint engineers see.</p>`;
+}
 function auditLine(a) {
   const who = data?.engineers.find((e) => e.id === a.engineer)?.name || a.engineer;
-  const f = (k, v) => k === "monthlyLimit" ? (v ? usd(v) : "no limit") : k === "modelCap" ? (v ? `up to ${v}` : "no cap") : k === "active" ? (v ? "enabled" : "disabled") : k === "overLimit" ? (v === "block" ? "block at limit" : "downgrade at limit") : v;
-  const label = { monthlyLimit: "limit", modelCap: "model cap", active: "access", overLimit: "rule", name: "name", team: "team" };
+  const f = (k, v) => k === "monthlyLimit" ? (v ? usd(v) : "no limit") : k === "modelCap" ? (v ? `up to ${v}` : "no cap") : k === "active" || k === "hints" ? (v === false ? "off" : "on") : k === "overLimit" ? (v === "block" ? "block at limit" : "downgrade at limit") : v;
+  const label = { monthlyLimit: "limit", modelCap: "model cap", active: "access", overLimit: "rule", name: "name", team: "team", hints: "prompt hints" };
   let what = a.action === "credit" ? `${a.amount > 0 ? "topped up" : "reduced"} by ${usd(Math.abs(a.amount))}`
     : a.action === "create" ? "added" : a.action === "rotate-key" ? "key rotated"
     : Object.keys(a.to || {}).map((k) => `${label[k] || k}: ${f(k, a.from?.[k])} → ${f(k, a.to[k])}`).join(", ");
@@ -416,6 +430,7 @@ function renderDrawer(d) {
         <button class="btn ${e.active ? "danger" : ""}" id="actGo">${e.active ? "Disable access" : "Enable access"}</button>
         <button class="btn" id="keyGo">Rotate key</button>
       </div>
+      <label class="row" style="margin-top:12px;font-size:13px"><input type="checkbox" id="hintsGo" ${e.hints !== false ? "checked" : ""}> Show private prompt hints after costly turns</label>
     </section>
 
     <section>
@@ -450,6 +465,7 @@ function renderDrawer(d) {
   drawer.querySelectorAll("input[name=ol]").forEach((r) => r.onchange = () => act(() => api(`/admin/api/engineers/${e.id}`, "PATCH", { overLimit: r.value }), "Rule saved"));
   drawer.querySelectorAll("input[name=cap]").forEach((r) => r.onchange = () => act(() => api(`/admin/api/engineers/${e.id}`, "PATCH", { modelCap: r.value || null }), "Model cap saved"));
   $("#actGo").onclick = () => { if (e.active && !confirm(`Disable gateway access for ${e.name}? Their requests will be refused until re-enabled.`)) return; act(() => api(`/admin/api/engineers/${e.id}`, "PATCH", { active: !e.active }), e.active ? "Access disabled" : "Access enabled"); };
+  $("#hintsGo").onchange = (ev) => act(() => api(`/admin/api/engineers/${e.id}`, "PATCH", { hints: ev.target.checked }), ev.target.checked ? "Prompt hints on" : "Prompt hints off");
   $("#keyGo").onclick = async () => { if (!confirm(`Rotate ${e.name}'s key? The old key stops working immediately.`)) return; try { const { key } = await api(`/admin/api/engineers/${e.id}/rotate-key`, "POST"); showKey(e.name, key); load(); } catch (err) { toast(err.message); } };
 }
 const short = (m = "") => m.replace("claude-", "").replace(/-(\d)-(\d)$/, " $1.$2").replace(/-(\d)$/, " $1");

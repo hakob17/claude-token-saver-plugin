@@ -6,6 +6,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 const home = fs.mkdtempSync(path.join(os.tmpdir(), "ts-team-"));
 Object.assign(process.env, {
@@ -117,6 +119,55 @@ const nk = (await admin("/admin/api/engineers/cara/rotate-key", "POST")).json.ke
 assert.equal((await ask({ "x-api-key": cara.key }, "hi")).status, 401, "old key stops working");
 assert.equal((await ask({ "x-api-key": nk }, "what is this?")).status, 200);
 assert.equal((await fetch(base + "/admin")).status, 200, "dashboard is served");
+
+// 11. prompt hints: a costly turn from a broad one-line prompt gets one hint, shown once
+const dee = (await admin("/admin/api/engineers", "POST", { name: "Dee" })).json;
+const H = { "x-api-key": dee.key };
+const sid = "abcdef12-3456-7890-abcd-000000000001";
+async function turnIn(session, text, extra = 0) {
+  const meta = { user_id: `user_x_account_y_session_${session}` };
+  const send = (messages) => fetch(base + "/v1/messages", { method: "POST", headers: { "content-type": "application/json", ...H },
+    body: JSON.stringify({ model: "claude-opus-5", stream: true, tools, metadata: meta, messages }) }).then((r) => r.text());
+  let msgs = [{ role: "user", content: text }];
+  await send(msgs);
+  for (let i = 0; i < extra; i++) {
+    msgs = [...msgs, { role: "assistant", content: [{ type: "tool_use", id: `t${i}`, name: "Bash", input: {} }] },
+      { role: "user", content: [{ type: "tool_result", tool_use_id: `t${i}`, is_error: true, content: "Error: boom" }] }];
+    await send(msgs);
+  }
+}
+const hintOf = (session, key = dee.key) => fetch(`${base}/token-saver/hint?session=${session}`, { headers: { "x-token-saver-key": key } }).then(async (r) => ({ status: r.status, ...(await r.json()) }));
+await turnIn(sid, "Build the whole admin panel end-to-end", 3);
+let h = await hintOf(sid);
+assert.match(h.hint, /^💡 token-saver: This turn cost \$\d+\.\d\d over 4 requests\. .*plan first/, "broad one-liner gets the split-it hint");
+assert.equal((await hintOf(sid)).hint, null, "a hint is shown once");
+assert.equal((await hintOf(sid, "tsk_nope")).status, 401);
+await turnIn(sid, "make it better", 1);
+assert.equal((await hintOf(sid)).hint, null, "cooldown: no second hint right after the first");
+const turnsFile = fs.readFileSync(path.join(home, "team", "turns.jsonl"), "utf8");
+assert.ok(!/admin panel|make it better/.test(turnsFile), "prompt text is never stored");
+assert.match(turnsFile, /"broad":true/);
+// The plugin's Stop hook asks the gateway and prints the hint as a systemMessage (user-only).
+const eve = (await admin("/admin/api/engineers", "POST", { name: "Eve" })).json;
+H["x-api-key"] = eve.key;
+const sid2 = "abcdef12-3456-7890-abcd-000000000002";
+await turnIn(sid2, "Rewrite the entire checkout from scratch", 2);
+const hook = path.join(path.dirname(fileURLToPath(import.meta.url)), "../scripts/prompt-hint.mjs");
+// The gateway runs in this process, so the hook must run without blocking the event loop.
+const runHook = (input, env) => new Promise((resolve) => {
+  const p = spawn(process.execPath, [hook], { env: { ...process.env, ...env } });
+  let stdout = ""; p.stdout.on("data", (c) => (stdout += c)); p.on("close", () => resolve({ stdout }));
+  p.stdin.end(JSON.stringify(input));
+});
+const out = await runHook({ session_id: sid2 }, { ANTHROPIC_BASE_URL: base, ANTHROPIC_CUSTOM_HEADERS: `x-token-saver-key: ${eve.key}` });
+assert.match(JSON.parse(out.stdout).systemMessage, /token-saver/, "Stop hook shows the hint");
+const quiet = await runHook({ session_id: sid2 }, { ANTHROPIC_BASE_URL: "" });
+assert.equal(quiet.stdout, "", "Stop hook is silent without a gateway");
+// An engineer with hints turned off gets none.
+await admin("/admin/api/engineers/eve", "PATCH", { hints: false });
+await turnIn("abcdef12-3456-7890-abcd-000000000003", "Build the whole thing end-to-end", 2);
+assert.equal((await hintOf("abcdef12-3456-7890-abcd-000000000003", eve.key)).hint, null, "hints off");
+assert.ok(Array.isArray((await admin("/admin/api/overview")).json.prompts.patterns));
 
 console.log(`ok — team gateway: ${seen.length} upstream calls, ${store.events.length} usage records, ${audit.length} audit entries`);
 server.close(); fs.rmSync(home, { recursive: true, force: true }); process.exit(0);

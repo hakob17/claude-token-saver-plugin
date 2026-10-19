@@ -17,9 +17,13 @@ export function openStore(dir) {
   fs.mkdirSync(dir, { recursive: true });
   const teamFile = path.join(dir, "team.json");
   const usageFile = path.join(dir, "usage.jsonl");
+  const turnsFile = path.join(dir, "turns.jsonl"); // prompt shape + cost per turn; never prompt text
   const state = fs.existsSync(teamFile) ? JSON.parse(fs.readFileSync(teamFile, "utf8")) : { engineers: {}, audit: [] };
   const events = fs.existsSync(usageFile)
     ? fs.readFileSync(usageFile, "utf8").split("\n").filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean)
+    : [];
+  const turns = fs.existsSync(turnsFile)
+    ? fs.readFileSync(turnsFile, "utf8").split("\n").filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean)
     : [];
   const byKey = new Map(Object.values(state.engineers).map((e) => [e.keyHash, e]));
   // Month-to-date spend per engineer, kept incrementally so budget checks stay O(1).
@@ -36,7 +40,8 @@ export function openStore(dir) {
   const audit = (engineer, action, detail = {}) => { state.audit.push({ at: new Date().toISOString(), engineer, action, ...detail }); save(); };
 
   const store = {
-    dir, events,
+    dir, events, turns,
+    recordTurn(t) { turns.push(t); fs.appendFileSync(turnsFile, JSON.stringify(t) + "\n"); },
     engineers: () => Object.values(state.engineers),
     get: (id) => state.engineers[id],
     byKey: (key) => (key ? byKey.get(hash(key)) : undefined),
@@ -66,7 +71,7 @@ export function openStore(dir) {
       let id = slug(name), i = 2;
       while (state.engineers[id]) id = `${slug(name)}-${i++}`;
       const key = newKey();
-      const e = { id, name: String(name), team: String(team), monthlyLimit: Number(monthlyLimit) || 0, overLimit, modelCap, active: true, keyHash: hash(key), keyHint: key.slice(-4), createdAt: new Date().toISOString() };
+      const e = { id, name: String(name), team: String(team), monthlyLimit: Number(monthlyLimit) || 0, overLimit, modelCap, active: true, hints: true, keyHash: hash(key), keyHint: key.slice(-4), createdAt: new Date().toISOString() };
       check(e);
       state.engineers[id] = e; byKey.set(e.keyHash, e);
       audit(id, "create", { by, to: { monthlyLimit: e.monthlyLimit, overLimit, modelCap } });
@@ -75,7 +80,7 @@ export function openStore(dir) {
     update(id, patch, by = "manager") {
       const e = state.engineers[id];
       if (!e) throw new Error("no such engineer");
-      const fields = ["name", "team", "monthlyLimit", "overLimit", "modelCap", "active"];
+      const fields = ["name", "team", "monthlyLimit", "overLimit", "modelCap", "active", "hints"];
       const next = { ...e };
       for (const f of fields) if (f in patch) next[f] = f === "monthlyLimit" ? Number(patch[f]) || 0 : patch[f];
       check(next);
@@ -111,4 +116,5 @@ function check(e) {
   if (!CAPS.includes(e.modelCap)) throw new Error("modelCap must be null, \"sonnet\" or \"haiku\"");
   if (!(e.monthlyLimit >= 0)) throw new Error("monthlyLimit must be >= 0");
   if (typeof e.active !== "boolean") throw new Error("active must be true or false");
+  if (e.hints !== undefined && typeof e.hints !== "boolean") throw new Error("hints must be true or false");
 }

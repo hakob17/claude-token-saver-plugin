@@ -73,6 +73,48 @@ The gateway starts the same [`router-proxy.mjs`](../plugins/token-saver/proxy/ro
 
 Conversations are pinned per engineer, so two engineers never share a pin. The single-user `/token-saver/status` page is turned off on the gateway because it would list everyone's conversations.
 
+## Prompt hints
+
+After a costly turn, an engineer sees a short private hint under Claude's reply in the terminal:
+
+```
+💡 token-saver: This turn cost $2.40 over 31 requests. Name the file and the function or component
+("fix `calcTotal` in src/cart.js") so Claude doesn't have to search for them.
+```
+
+How it works:
+
+1. **The gateway records the prompt's shape for each turn, never its text.** It records:
+   - the length;
+   - whether it names files or code symbols;
+   - whether it says how to check the result;
+   - vague wording ("fix it", "make it better");
+   - one-line requests for something huge ("the whole app end-to-end");
+   - whether it corrects the previous turn.
+
+   It also records what the turn cost, how many requests it took and how many tool calls failed. These records go in `turns.jsonl`.
+2. **The token-saver plugin asks for a hint when each turn ends.** Its Stop hook ([`scripts/prompt-hint.mjs`](../plugins/token-saver/scripts/prompt-hint.mjs)) asks the gateway (`GET /token-saver/hint?session=…`, authenticated with the engineer's key) and shows the answer as a `systemMessage`. The hint is shown to the user only. It's never added to the conversation, so the model never sees it and the prompt cache isn't affected.
+3. **Hints are rare by design.** A hint is only given when all of these hold:
+   - the turn cost at least $0.50 or took 20 or more requests (`TOKEN_SAVER_HINT_MIN_COST`, `TOKEN_SAVER_HINT_MIN_REQUESTS`);
+   - a pattern was missed;
+   - it's been at least 3 turns since the engineer's last hint (`TOKEN_SAVER_HINT_COOLDOWN`);
+   - the engineer hasn't seen this turn's hint yet.
+
+   Questions never get hints. Once each side has 5 or more turns, the hint also quotes the team's own numbers: "turns that do this averaged $0.90 vs $2.10".
+4. **Engineers can turn hints off.** Set `TOKEN_SAVER_HINTS=off`, or a manager can turn them off per engineer in the dashboard.
+
+The rules, most useful first:
+
+| Missed pattern | Hint |
+|---|---|
+| A one-line request for something big | Ask for a short plan first, then build one part per turn |
+| No file or function named | Name the file and the function or component |
+| No way to check the result | Say what done looks like and how to check it |
+| Vague wording | Replace "fix it" or "make it better" with the concrete change |
+| 3+ failing commands in the turn | Paste the exact error or failing test's name next time |
+
+**Managers see team totals only.** The **Prompt patterns** card shows, for each pattern, how many work turns followed it, the average cost with and without it, and how much was spent in turns that missed it. No individual prompts or hints are shown.
+
 ## Limits
 
 - **Prices are API list prices** for the model that actually answered, computed from the usage the API returns. With a subscription login the engineer isn't billed per token; the dashboard still shows the API-equivalent cost.

@@ -53,7 +53,7 @@ const HARD_RE = /\b(design|architect(ure)?|plan|refactor|migrat(e|ion)|rewrite|f
 const EDIT_RE = /\b(add|fix|change|update|rename|create|write|remove|delete|move|test|bump|tweak|adjust|replace)\b/gi;
 // "don't change anything", "without refactoring": a negated verb asks for less work, not more.
 const NEG_RE = /\b(?:don'?t|do not|never|without|no need to|not)\s+(?:\w+\s+)?(?:add|fix|change|update|rename|create|write|remove|delete|move|test|bump|tweak|adjust|replace|modify|edit|touch|refactor|rewrite|build|implement|migrate|redesign)\w*/gi;
-const FILE_RE = /[\w./-]+\.(m?[jt]sx?|swift|kt|py|go|rb|java|json|md|css|s?html|ya?ml|sql|sh|toml)\b/g;
+export const FILE_RE = /[\w./-]+\.(m?[jt]sx?|swift|kt|py|go|rb|java|json|md|css|s?html|ya?ml|sql|sh|toml)\b/g;
 
 // Score the user's message. Positive = harder.
 export function classifyTurn(body) {
