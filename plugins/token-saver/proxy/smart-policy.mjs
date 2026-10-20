@@ -112,8 +112,11 @@ export function decideSmart({ requested, messages, sub, aux, boundary, fresh, ct
 
   // Moving up is always allowed. Moving down re-caches the context on the cheaper model:
   // allowed on a fresh conversation, a small context, or to the cheap tier (its writes cost ~nothing).
+  // Over budget, leaving the expensive model is forced at the turn boundary whatever the context size.
   const up = RANK[tier] > RANK[curTier];
-  if (fresh || up || ctx <= cfg.maxSwitchCtx || tier === "simple")
+  const forced = overBudget && curTier === "hard";
+  if (forced) cls.signals.push("over budget: switch forced despite context size");
+  if (fresh || up || forced || ctx <= cfg.maxSwitchCtx || tier === "simple")
     return { model: target, tier, reason: `turn: ${tier} (score ${cls.score}) ${up ? "escalate" : "switch"}`, switched: true, effort, ctxEdit, cls };
   return { model: current, tier: curTier, reason: `turn: ${tier} (score ${cls.score}) held: context ${Math.round(ctx / 1000)}k too large to re-cache`, effort: pin?.effort, ctxEdit, cls };
 }

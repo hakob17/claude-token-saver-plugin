@@ -16,7 +16,7 @@ Object.assign(process.env, {
   TOKEN_SAVER_PROXY_CTX_EDIT_AT: "3000", // est. tokens (~12k chars) so tests can cross it
   TOKEN_SAVER_PROXY_MAX_SWITCH_CTX: "2000",
 });
-const { classifyTurn } = await import("./smart-policy.mjs");
+const { classifyTurn, decideSmart } = await import("./smart-policy.mjs");
 const { start } = await import("./router-proxy.mjs");
 
 // ---- classifier ----
@@ -46,6 +46,12 @@ assert.equal(classifyTurn(msg("where is the admin password configured?", failing
 assert.equal(classifyTurn(msg("Add a rename button to the product card", failing)).tier, "hard", "a work turn after failures escalates");
 assert.equal(classifyTurn(msg("How is the cart stored in the browser? Just explain, don't change anything.", failing)).tier, "simple", "a negated edit word (\"don't change\") doesn't make a question a work turn");
 assert.equal(classifyTurn(msg("Fix the cart total, but don't refactor the API", prior)).tier, "standard", "only the negated verb is ignored");
+
+// over budget with a large context: the next turn leaves Opus anyway (a plain small edit would be held)
+const bigTurn = { requested: "claude-opus-5", messages: msg("Add a rename button to the product card", prior).messages, boundary: true, fresh: false, ctx: 90_000, pin: { model: "claude-opus-5", tier: "hard" } };
+assert.equal(decideSmart({ ...bigTurn, overBudget: false }).model, "claude-opus-5", "large context holds the expensive model");
+assert.equal(decideSmart({ ...bigTurn, overBudget: true }).model, "claude-sonnet-5-5", "over budget forces the switch down");
+assert.equal(decideSmart({ ...bigTurn, boundary: false, overBudget: true }).model, "claude-opus-5", "but never mid-turn");
 
 // ---- proxy end to end ----
 const seen = [];

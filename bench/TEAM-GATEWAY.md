@@ -56,7 +56,7 @@ The gateway strips `x-token-saver-key` before forwarding. In the first mode it r
 |---|---|
 | **Monthly limit** | Budget in USD per calendar month (0 = no limit). Lowering it takes effect on the next request. |
 | **Top-up** | Adds to this month's limit only (a negative amount takes budget away). Next month starts from the monthly limit again. |
-| **When the limit is reached: Downgrade** | The router stops using the expensive model. The budget policy fails over at the next turn boundary; the smart policy caps hard turns at Sonnet. Work continues more cheaply. |
+| **When the limit is reached: Downgrade** | The router stops using the expensive model. The budget policy fails over at the next turn boundary; the smart policy caps hard turns at Sonnet from the next turn, whatever the context size. Work continues more cheaply. |
 | **When the limit is reached: Block** | Requests get a 403 with a readable message ("monthly budget reached ($X of $Y). Ask your manager for a top-up.") and never reach the API. |
 | **Highest model allowed** | *Up to Sonnet* or *Haiku only*. Applies to every request, whatever the budget. |
 | **Disable access / Rotate key** | Refuse all requests, or issue a new key (the old one stops working at once). |

@@ -45,7 +45,7 @@ Other rules:
 - **Side requests without tools** (Claude Code's titles and summaries) go to Haiku.
 - **Subagents** go to Sonnet. Agents that name a cheaper model in their definition already ask for it themselves.
 - **A user who picked Sonnet or Haiku is never rerouted.** Only requests for an expensive model are.
-- **With a budget set,** the hard tier is capped at standard once the budget is spent.
+- **With a budget set,** the hard tier is capped at standard once the budget is spent. The move down happens at the next turn boundary even when the context is large.
 
 Every decision is logged with its tier, score and signals (`~/.claude/token-saver/proxy-log.jsonl`), so a misroute can be traced and the weights tuned.
 

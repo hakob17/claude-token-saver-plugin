@@ -3,262 +3,487 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Routing Proxy Demo</title>
-<meta name="description" content="How the token-saver routing proxy picks Opus, Sonnet or Haiku per request, before generation.">
+<title>Token Saver Router</title>
+<meta name="description" content="How token-saver routes each Claude Code turn to Haiku, Sonnet or Opus, gives managers a team gateway, and hints engineers toward cheaper prompts.">
 <style>
 :root{
-  --bg:#f6f5f1;--panel:#ffffff;--ink:#1d1d1b;--muted:#6b6a65;--line:#d9d6cc;
-  --opus:#7b4fd6;--sonnet:#d97a2b;--haiku:#2f8f6b;--proxy:#2b6cd9;--bad:#c9413b;
+  color-scheme:light;
+  --bg:#f9f9f7;--panel:#fcfcfb;--raised:#ffffff;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--line:#e1e0d9;--axis:#c3c2b7;
+  --opus:#2a78d6;--sonnet:#eb6834;--haiku:#1baf7a;--proxy:#6250d6;--bad:#d03b3b;--warn:#fab219;--good:#0ca30c;
+  --term:#16161a;--term-ink:#e9e8e3;--term-dim:#8d8c86;--hint:#f2c94c;
   --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#141413;--panel:#1e1e1c;--ink:#ecebe6;--muted:#9d9b94;--line:#34332f;
-  --opus:#a283f0;--sonnet:#f0a060;--haiku:#5cc79c;--proxy:#6ea0f2;--bad:#ec6f68;}}
-:root[data-theme="dark"]{--bg:#141413;--panel:#1e1e1c;--ink:#ecebe6;--muted:#9d9b94;--line:#34332f;
-  --opus:#a283f0;--sonnet:#f0a060;--haiku:#5cc79c;--proxy:#6ea0f2;--bad:#ec6f68;}
+  color-scheme:dark;
+  --bg:#0d0d0d;--panel:#1a1a19;--raised:#222221;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--line:#2c2c2a;--axis:#383835;
+  --opus:#3987e5;--sonnet:#d95926;--haiku:#199e70;--proxy:#9085e9;--term:#0f0f12;}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0d0d0d;--panel:#1a1a19;--raised:#222221;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--line:#2c2c2a;--axis:#383835;
+  --opus:#3987e5;--sonnet:#d95926;--haiku:#199e70;--proxy:#9085e9;--term:#0f0f12;}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
-main{max-width:1040px;margin:0 auto;padding:28px 16px 60px}
-h1{font-size:26px;margin:0 0 4px}h2{font-size:18px;margin:36px 0 10px}
-.sub{color:var(--muted);margin:0 0 22px}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1080px;margin:0 auto;padding:32px 16px 72px}
+h1{font-size:30px;margin:0 0 6px;letter-spacing:-.02em}
+h2{font-size:21px;margin:56px 0 6px;letter-spacing:-.01em}
+h3{font-size:15px;margin:0 0 8px}
+.lead{color:var(--ink2);margin:0 0 22px;max-width:760px;font-size:16px}
+.sec-sub{color:var(--ink2);margin:0 0 16px;max-width:780px}
 .tag{display:inline-block;font:600 11px var(--mono);letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--line);border-radius:999px;padding:2px 8px;margin-left:8px;vertical-align:middle;color:var(--muted)}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
-.grid{display:grid;grid-template-columns:1fr 300px;gap:16px}
-@media (max-width:820px){.grid{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.stat .v{font-size:30px;font-weight:700;letter-spacing:-.02em}
+.stat .l{color:var(--ink2);font-size:13px}
+.stat .n{color:var(--muted);font-size:12px;margin-top:2px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:860px){.grid,.two{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 svg{width:100%;height:auto;display:block}
-.node rect{fill:var(--panel);stroke:var(--line);stroke-width:1.5}
-.node text{fill:var(--ink);font:600 14px system-ui}
+svg text{font-family:system-ui,-apple-system,sans-serif}
+.node rect{fill:var(--raised);stroke:var(--line);stroke-width:1.5;transition:stroke .2s}
+.node text{fill:var(--ink);font-weight:600;font-size:14px}
 .node .s{fill:var(--muted);font:12px var(--mono)}
-.wire{stroke:var(--line);stroke-width:2;fill:none}
-.wire.on{stroke-width:3}
-.node.lit rect{stroke-width:3}
-#n-opus.lit rect{stroke:var(--opus)}#n-sonnet.lit rect{stroke:var(--sonnet)}#n-haiku.lit rect{stroke:var(--haiku)}#n-proxy.lit rect{stroke:var(--proxy)}
-.controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-button{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:9px;padding:7px 12px;cursor:pointer}
-button:hover{border-color:var(--proxy)}button.primary{background:var(--proxy);border-color:var(--proxy);color:#fff}
+.wire{stroke:var(--line);stroke-width:2;fill:none;transition:stroke .2s}
+.lit rect{stroke-width:3}
+button{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--raised);color:var(--ink);border-radius:9px;padding:7px 12px;cursor:pointer}
+button:hover{border-color:var(--proxy)}
+button.primary{background:var(--proxy);border-color:var(--proxy);color:#fff;font-weight:600}
 button:disabled{opacity:.5;cursor:default}
-label{font-size:13px;color:var(--muted);display:block;margin:10px 0 4px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.chip{font-size:13px;padding:5px 10px;border-radius:999px}
+textarea{width:100%;font:14px/1.45 var(--mono);background:var(--raised);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px;resize:vertical;min-height:62px}
+label.small{font-size:13px;color:var(--ink2);display:flex;align-items:center;gap:6px;margin:8px 0 4px}
 input[type=range]{width:100%}
-.meter{height:10px;border-radius:6px;background:var(--line);overflow:hidden}
-.meter i{display:block;height:100%;background:var(--haiku);transition:width .3s,background .3s}
+.meter{height:8px;border-radius:5px;background:var(--line);overflow:hidden;margin-top:4px}
+.meter i{display:block;height:100%;background:var(--good);transition:width .3s,background .3s}
 .kv{font:13px var(--mono);display:flex;justify-content:space-between;gap:8px;margin:3px 0}
-.kv b{font-weight:600}
-.decision{margin-top:12px;padding:10px;border-radius:10px;border:1px dashed var(--line);font:13px var(--mono);min-height:84px}
-.pill{display:inline-block;padding:1px 8px;border-radius:999px;color:#fff;font:600 12px var(--mono)}
-.p-opus{background:var(--opus)}.p-sonnet{background:var(--sonnet)}.p-haiku{background:var(--haiku)}
-#log{font:12.5px var(--mono);max-height:220px;overflow:auto;margin:0;padding:0;list-style:none}
-#log li{padding:5px 0;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:baseline}
+.pill{display:inline-block;padding:1px 9px;border-radius:999px;color:#fff;font:600 12px var(--mono)}
+.p-opus{background:var(--opus)}.p-sonnet{background:var(--sonnet)}.p-haiku{background:var(--haiku)}.p-blocked{background:var(--bad)}
+.decision{margin-top:12px;padding:12px;border-radius:10px;border:1px dashed var(--axis);font-size:13.5px;min-height:96px}
+.sig{display:inline-block;font:12px var(--mono);border:1px solid var(--line);border-radius:6px;padding:1px 6px;margin:2px 3px 2px 0;opacity:0;transform:translateY(4px);transition:opacity .25s,transform .25s}
+.sig.in{opacity:1;transform:none}
+.sig.pos{border-color:color-mix(in srgb,var(--sonnet) 60%,transparent)}.sig.neg{border-color:color-mix(in srgb,var(--haiku) 60%,transparent)}
+.scorebar{position:relative;height:28px;margin:10px 0 4px;border-radius:8px;background:linear-gradient(90deg,color-mix(in srgb,var(--haiku) 22%,transparent) 0 33%,color-mix(in srgb,var(--sonnet) 22%,transparent) 33% 66%,color-mix(in srgb,var(--opus) 22%,transparent) 66%)}
+.scorebar span{position:absolute;top:6px;font:11px var(--mono);color:var(--ink2)}
+.scorebar b{position:absolute;top:-4px;width:4px;height:36px;border-radius:2px;background:var(--ink);transition:left .6s cubic-bezier(.3,1.4,.5,1)}
+#log{font:12.5px var(--mono);max-height:230px;overflow:auto;margin:0;padding:0;list-style:none}
+#log li{padding:6px 0;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:baseline}
 #log li .r{color:var(--muted)}
-.cmp{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-@media (max-width:820px){.cmp{grid-template-columns:1fr}}
-.lane{height:30px;border-radius:8px;background:var(--bg);border:1px solid var(--line);position:relative;overflow:hidden;margin:6px 0}
-.seg{position:absolute;top:0;bottom:0;width:0;display:flex;align-items:center;padding-left:8px;color:#fff;font:600 12px var(--mono);white-space:nowrap;overflow:hidden;transition:width 1s linear}
-.cost{font:600 22px var(--mono);margin-top:6px}
 .note{color:var(--muted);font-size:13px}
-ul.rules{margin:0;padding-left:18px}ul.rules li{margin:4px 0}
-@media (prefers-reduced-motion:reduce){.seg,.meter i{transition:none}}
+/* session race */
+.lane{display:flex;height:34px;border-radius:8px;background:var(--raised);border:1px solid var(--line);overflow:hidden;margin:6px 0 2px}
+.lane i{display:block;height:100%;width:0;transition:width .7s ease-out;border-right:2px solid var(--panel)}
+.lanehead{display:flex;justify-content:space-between;font-size:13.5px;margin-top:12px}
+.lanehead b{font:700 18px var(--mono)}
+.turns{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin-top:14px}
+.turn{border:1px solid var(--line);border-radius:10px;padding:8px;font-size:12px;opacity:.35;transition:opacity .3s,border-color .3s;background:var(--raised)}
+.turn.on{opacity:1}
+.turn .t{font-weight:600;font-size:12.5px;margin-bottom:4px;min-height:34px}
+.turn .c{font:12px var(--mono);color:var(--ink2)}
+@media (max-width:860px){.turns{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* team */
+.eng{display:grid;grid-template-columns:150px 1fr 120px;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.eng .who b{display:block}.eng .who span{font-size:12px;color:var(--muted)}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
+.badge .dot{width:8px;height:8px;border-radius:50%}
+.track{position:relative;height:30px;border-radius:8px;background:var(--raised);border:1px solid var(--line);overflow:hidden}
+.track .ball{position:absolute;top:7px;left:6px;width:16px;height:16px;border-radius:50%;background:var(--proxy);opacity:0}
+.track .gate{position:absolute;top:0;bottom:0;left:50%;width:3px;background:var(--axis)}
+.track .out{position:absolute;right:8px;top:5px;font:12px var(--mono);color:var(--ink2)}
+.eng .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.eng .acts button{font-size:12px;padding:4px 8px}
+@media (max-width:640px){.eng{grid-template-columns:1fr}.eng .acts{justify-content:flex-start}}
+/* terminal */
+.term{background:var(--term);color:var(--term-ink);border-radius:12px;padding:14px 16px;font:13px/1.6 var(--mono);min-height:330px;overflow:hidden;border:1px solid #2a2a30}
+.term .dim{color:var(--term-dim)}.term .you{color:#9cc4ff}.term .ok{color:#7ad6a8}
+.term .hintline{color:var(--hint);border-left:3px solid var(--hint);padding-left:10px;margin:8px 0}
+.term .caret{display:inline-block;width:8px;height:15px;background:var(--term-ink);vertical-align:-2px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.bars{display:grid;gap:10px;margin-top:6px}
+.bar{display:grid;grid-template-columns:150px 1fr 70px;align-items:center;gap:10px;font-size:13.5px}
+.bar .b{height:14px;border-radius:0 4px 4px 0;width:0;transition:width 1s ease-out}
+.bar .val{font:13px var(--mono);text-align:right}
+ul.rules{margin:0;padding-left:18px}ul.rules li{margin:6px 0}
+footer{margin-top:56px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:16px}
+a{color:var(--proxy)}
+code{font:13px var(--mono);background:color-mix(in srgb,var(--line) 60%,transparent);padding:1px 5px;border-radius:5px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
 <main>
-  <h1>Routing proxy for Claude Code <span class="tag">experimental</span></h1>
-  <p class="sub">Claude Code talks to a local proxy via <code>ANTHROPIC_BASE_URL</code>. The proxy picks the model for each request <em>before</em> anything is generated. Try the scenarios below.</p>
+  <h1>Token Saver for Claude Code <span class="tag">experimental</span></h1>
+  <p class="lead">A local proxy in front of the Claude API that picks the model for every turn <em>before</em> anything is generated. A team gateway gives managers spend limits and visibility. Engineers get private hints that make their prompts cheaper.</p>
 
+  <div class="stats">
+    <div class="card stat"><div class="l">Smart router, web app + questions</div><div class="v" style="color:var(--haiku)">−49%</div><div class="n">$12.04 → $6.16, mean of 3 rounds, 6/6 passed all 37 checks</div></div>
+    <div class="card stat"><div class="l">Routing proxy, native iOS app</div><div class="v" style="color:var(--haiku)">−52%</div><div class="n">$29.63 → $14.21, app built and tested</div></div>
+    <div class="card stat"><div class="l">Proxy + low effort, web shop</div><div class="v" style="color:var(--haiku)">−51%</div><div class="n">$8.48 → $4.14, 37/37 checks</div></div>
+    <div class="card stat"><div class="l">Hook-based router (earlier attempt)</div><div class="v" style="color:var(--bad)">+46%</div><div class="n">blocks after Opus has written the code</div></div>
+  </div>
+
+  <!-- 1. Smart router -->
+  <h2>1. The smart router: one decision per turn</h2>
+  <p class="sec-sub">Type a request or pick one. The classifier reads only your words (no tool output, no injected reminders), scores them, and sends the turn to the tier it needs. The model then stays pinned for the whole turn, so the prompt cache and thinking chain stay valid.</p>
   <div class="grid">
     <div class="card">
-      <svg viewBox="0 0 640 300" role="img" aria-label="Claude Code sends requests to the proxy, which forwards them to Opus, Sonnet or Haiku">
-        <path id="w-in" class="wire" d="M150 150 H250"/>
-        <path id="w-opus" class="wire" d="M390 150 C440 150 440 60 490 60"/>
-        <path id="w-sonnet" class="wire" d="M390 150 H490"/>
-        <path id="w-haiku" class="wire" d="M390 150 C440 150 440 240 490 240"/>
-        <g class="node" id="n-cc"><rect x="10" y="115" width="140" height="70" rx="12"/><text x="80" y="146" text-anchor="middle">Claude Code</text><text class="s" x="80" y="166" text-anchor="middle">asks for Opus</text></g>
-        <g class="node" id="n-proxy"><rect x="250" y="105" width="140" height="90" rx="12"/><text x="320" y="140" text-anchor="middle">router-proxy</text><text class="s" x="320" y="160" text-anchor="middle">127.0.0.1:8787</text><text class="s" id="proxy-sub" x="320" y="178" text-anchor="middle">idle</text></g>
-        <g class="node" id="n-opus"><rect x="490" y="30" width="140" height="60" rx="12"/><text x="560" y="58" text-anchor="middle">Opus</text><text class="s" x="560" y="76" text-anchor="middle">$$$</text></g>
-        <g class="node" id="n-sonnet"><rect x="490" y="120" width="140" height="60" rx="12"/><text x="560" y="148" text-anchor="middle">Sonnet</text><text class="s" x="560" y="166" text-anchor="middle">$$</text></g>
-        <g class="node" id="n-haiku"><rect x="490" y="210" width="140" height="60" rx="12"/><text x="560" y="238" text-anchor="middle">Haiku</text><text class="s" x="560" y="256" text-anchor="middle">$</text></g>
-        <circle id="packet" r="8" cx="150" cy="150" fill="var(--proxy)" opacity="0"/>
-        <circle id="reply" r="6" cx="490" cy="150" fill="var(--muted)" opacity="0"/>
+      <div class="chips" id="presets"></div>
+      <textarea id="prompt" aria-label="Your request">where is the admin password configured?</textarea>
+      <label class="small"><input type="checkbox" id="trouble"> The previous turn had 3+ failing commands</label>
+
+      <svg viewBox="0 0 660 270" role="img" aria-label="Claude Code sends each turn to the proxy, which routes it to Haiku, Sonnet or Opus">
+        <path id="w-in" class="wire" d="M150 135 H245"/>
+        <path id="w-opus" class="wire" d="M405 135 C455 135 455 50 505 50"/>
+        <path id="w-sonnet" class="wire" d="M405 135 H505"/>
+        <path id="w-haiku" class="wire" d="M405 135 C455 135 455 220 505 220"/>
+        <g class="node" id="n-cc"><rect x="8" y="100" width="142" height="70" rx="12"/><text x="79" y="131" text-anchor="middle">Claude Code</text><text class="s" x="79" y="151" text-anchor="middle">asks for Opus</text></g>
+        <g class="node" id="n-proxy"><rect x="245" y="88" width="160" height="94" rx="12"/><text x="325" y="121" text-anchor="middle">token-saver proxy</text><text class="s" x="325" y="142" text-anchor="middle">ANTHROPIC_BASE_URL</text><text class="s" id="proxy-sub" x="325" y="162" text-anchor="middle">idle</text></g>
+        <g class="node" id="n-opus"><rect x="505" y="20" width="147" height="60" rx="12"/><text x="578" y="47" text-anchor="middle">Opus</text><text class="s" x="578" y="66" text-anchor="middle">big builds</text></g>
+        <g class="node" id="n-sonnet"><rect x="505" y="105" width="147" height="60" rx="12"/><text x="578" y="132" text-anchor="middle">Sonnet</text><text class="s" x="578" y="151" text-anchor="middle">standard edits</text></g>
+        <g class="node" id="n-haiku"><rect x="505" y="190" width="147" height="60" rx="12"/><text x="578" y="217" text-anchor="middle">Haiku</text><text class="s" x="578" y="236" text-anchor="middle">questions</text></g>
+        <circle id="packet" r="8" cx="150" cy="135" fill="var(--proxy)" opacity="0"/>
+        <circle id="reply" r="6" cx="505" cy="135" fill="var(--muted)" opacity="0"/>
       </svg>
+
       <div class="controls">
-        <button class="primary" data-ev="new">New session / <code>/clear</code></button>
+        <button class="primary" data-ev="turn">Send as a new turn</button>
         <button data-ev="tool">Tool-loop step</button>
-        <button data-ev="turn">New user turn</button>
-        <button data-ev="sub">Subagent call</button>
-        <button data-ev="auto">▶ Play a session</button>
+        <button data-ev="side">Side request (title)</button>
+        <button data-ev="clear"><code>/clear</code></button>
       </div>
-      <div class="decision" id="decision" aria-live="polite">Press a button to send a request.</div>
+      <div class="decision" id="decision" aria-live="polite">Press <b>Send as a new turn</b>.</div>
     </div>
 
     <div class="card">
-      <label for="spend">Spent this month: <b id="spend-v">$40</b> of $100</label>
+      <h3>Classifier</h3>
+      <div class="scorebar" aria-hidden="true"><span style="left:8px">Haiku ≤ −1</span><span style="left:38%">Sonnet 0–3</span><span style="right:8px">Opus ≥ 4</span><b id="needle" style="left:50%"></b></div>
+      <div id="signals" style="min-height:56px"></div>
+      <label class="small" for="ctx">Context so far: <b id="ctx-v">&nbsp;12k</b> tokens</label>
+      <input id="ctx" type="range" min="2" max="160" value="12">
+      <label class="small" for="spend">Spent this month: <b id="spend-v">&nbsp;$40</b> of $100</label>
       <input id="spend" type="range" min="0" max="130" value="40">
       <div class="meter"><i id="meter" style="width:40%"></i></div>
-      <label for="ctx">Conversation context: <b id="ctx-v">12k</b> tokens</label>
-      <input id="ctx" type="range" min="2" max="160" value="12">
-      <label><input type="checkbox" id="subrule" checked> Send subagents to Haiku</label>
-      <div style="margin-top:12px">
-        <div class="kv"><span>Pinned model</span><b id="pin">–</b></div>
-        <div class="kv"><span>Budget failover at</span><b>100%</b></div>
-        <div class="kv"><span>Forced switch at</span><b>110%</b></div>
-        <div class="kv"><span>Max context to switch</span><b>40k</b></div>
+      <div style="margin-top:10px">
+        <div class="kv"><span>Pinned for this turn</span><b id="pin">–</b></div>
       </div>
-      <h3 style="font-size:14px;margin:16px 0 6px">Request log</h3>
+      <h3 style="margin-top:14px">Request log</h3>
       <ul id="log"></ul>
     </div>
   </div>
 
-  <h2>Rules</h2>
+  <!-- 2. Session race -->
+  <h2>2. A real session, replayed</h2>
+  <p class="sec-sub">The benchmark session: build a coffee shop web app from a fixed plan in 3 build turns, with 4 quick questions in between. Same prompts, graded by the same 37 checks. Round 1 of 3 shown, with measured per-turn costs; the means over 3 rounds were $12.04 vs $6.16. Note turn 1: the routed run spent more there, because runs vary; the savings come from the other six turns.</p>
+  <div class="card">
+    <div class="lanehead"><span>No plugin: everything on Opus</span><b id="cost-a">$0.00</b></div>
+    <div class="lane" id="lane-a"></div>
+    <div class="lanehead"><span>Smart router: each turn on the model it needs</span><b id="cost-b" style="color:var(--haiku)">$0.00</b></div>
+    <div class="lane" id="lane-b"></div>
+    <div class="turns" id="turns"></div>
+    <div class="controls"><button class="primary" id="race">▶ Replay the session</button><span class="note" style="align-self:center">Both builds passed 37/37. Cost at API list prices.</span></div>
+  </div>
+
+  <!-- 3. Team gateway -->
+  <h2>3. Team gateway: limits that act on the next request</h2>
+  <p class="sec-sub">One shared proxy for the team. Every engineer has a key, a monthly limit and a rule for what happens at the limit. Send a request for each engineer, then act as their manager.</p>
+  <div class="card">
+    <div id="team"></div>
+    <p class="note" style="margin-bottom:0">Managers see all of this, plus spend by model, savings from routing, router decisions and an audit trail, in a dashboard at <code>/admin</code>. Keys are stored as hashes. Blocked requests never reach the API.</p>
+  </div>
+
+  <!-- 4. Prompt hints -->
+  <h2>4. Prompt hints: private, after costly turns</h2>
+  <p class="sec-sub">The gateway records each prompt's shape, never its text: whether it names files, says how to check the result, or asks for something huge in one line. After a costly turn that missed a pattern, a Stop hook shows a hint under the reply. It's shown to the engineer only; the model never sees it.</p>
+  <div class="two">
+    <div class="term" id="term" aria-live="polite"></div>
+    <div class="card">
+      <h3>Same feature, two prompts</h3>
+      <div class="bars">
+        <div class="bar"><span>Vague one-liner</span><div><div class="b" id="hb1" style="background:var(--opus)"></div></div><span class="val" id="hv1">–</span></div>
+        <div class="bar"><span>After the hint</span><div><div class="b" id="hb2" style="background:var(--sonnet)"></div></div><span class="val" id="hv2">–</span></div>
+      </div>
+      <p class="note">Illustrative numbers. In the team dashboard, managers see team averages for each pattern (for example, turns that name the file vs turns that don't), never individual prompts.</p>
+      <ul class="rules" style="font-size:14px">
+        <li><b>Big one-liner?</b> Ask for a short plan first, then build one part per turn.</li>
+        <li><b>No target?</b> Name the file and function.</li>
+        <li><b>No check?</b> Say what done looks like (<code>npm test</code> should pass).</li>
+        <li><b>Vague words?</b> Say the concrete change.</li>
+      </ul>
+      <div class="controls"><button class="primary" id="play-term">▶ Play</button></div>
+    </div>
+  </div>
+
+  <!-- 5. Rules -->
+  <h2>How it stays safe</h2>
   <div class="card">
     <ul class="rules">
-      <li><b>Budget failover:</b> at 100% of the monthly budget, requests for Opus are rewritten to Sonnet.</li>
-      <li><b>Subagents (optional):</b> requests without the <code>Agent</code> tool are subagents and can go to Haiku or Sonnet.</li>
-      <li><b>Switch only at boundaries:</b> a new conversation, or a new user turn while the context is ≤ 40k tokens. Never in the middle of a tool loop, so the prompt cache and the thinking chain stay valid. Past 110% the switch happens at the next turn regardless of context size.</li>
-      <li><b>Thinking blocks</b> signed by the old model are dropped from turns before the switch point.</li>
-      <li><b>Fail open:</b> if the cheaper model rejects a rewritten request, the original is resent. That combination is then skipped for later conversations.</li>
+      <li><b>Decides before generation.</b> Hooks can only block Opus after it has written the code; the proxy picks the model first. That's the difference between +46% and −52%.</li>
+      <li><b>Switches only at turn boundaries.</b> Never in the middle of a tool loop. Moving down a tier only when re-caching is cheap (new conversation, context ≤ 40k, or down to Haiku).</li>
+      <li><b>Over budget, moves down.</b> Once the budget is spent, the next turn leaves Opus whatever the context size; never in the middle of a turn.</li>
+      <li><b>Moves up after trouble.</b> 3+ failing commands in a turn escalate the next one, unless it's a plain question. Negations ("don't change anything") don't count as edits.</li>
+      <li><b>Fails open.</b> If the API rejects a rewritten request, the original is sent once and that combination is skipped later.</li>
+      <li><b>Works with subscriptions.</b> Your own login passes through; the gateway key travels in a header.</li>
+      <li><b>Private by design.</b> Prompt text is never stored. Hints go only to the engineer; managers see team totals.</li>
     </ul>
   </div>
 
-  <h2>Why not hooks? Same request, two routers</h2>
-  <div class="card">
-    <p class="note" style="margin-top:0">Task: write a 300-line module. Bars show who generates which tokens. Illustrative proportions, not measured costs.</p>
-    <div class="cmp">
-      <div>
-        <b>Hook router</b> <span class="note">(blocks after the fact)</span>
-        <div class="lane"><div class="seg" id="h1" style="background:var(--opus)">Opus writes the code</div></div>
-        <div class="lane"><div class="seg" id="h2" style="background:var(--bad)">blocked → Opus writes spec</div></div>
-        <div class="lane"><div class="seg" id="h3" style="background:var(--sonnet)">Sonnet rewrites the code</div></div>
-        <div class="cost" id="hc">–</div>
-      </div>
-      <div>
-        <b>Routing proxy</b> <span class="note">(decides before generation)</span>
-        <div class="lane"><div class="seg" id="p1" style="background:var(--sonnet)">Sonnet writes the code</div></div>
-        <div class="lane"></div><div class="lane"></div>
-        <div class="cost" id="pc">–</div>
-      </div>
-    </div>
-    <div class="controls"><button id="race">▶ Run comparison</button></div>
-    <p class="note">The benchmarked hook router cost <b>+31%</b> on a large feature. The proxy has not been benchmarked yet; see <code>bench/ROUTING-PROXY.md</code> for the plan.</p>
-  </div>
+  <footer>Code, benchmarks and design notes: <a href="https://github.com/hakob17/claude-token-saver-plugin">github.com/hakob17/claude-token-saver-plugin</a> (branches <code>smart-router</code> and <code>team-gateway</code>). Prices are API list prices for the model that answered.</footer>
 </main>
 
 <script>
-const $ = (s) => document.querySelector(s);
-const C = { threshold: 1.0, hard: 1.1, maxCtx: 40, fallback: "sonnet" };
-const state = { pin: null, inTurn: false, busy: false };
+const $ = (s, el = document) => el.querySelector(s);
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-function spend() { return +$("#spend").value; }
-function ctx() { return +$("#ctx").value; }
-$("#spend").oninput = () => {
-  const v = spend(); $("#spend-v").textContent = "$" + v;
-  const m = $("#meter"); m.style.width = Math.min(100, v) + "%";
-  m.style.background = v >= 110 ? "var(--bad)" : v >= 100 ? "var(--sonnet)" : v >= 80 ? "#d4b02a" : "var(--haiku)";
-};
-$("#ctx").oninput = () => ($("#ctx-v").textContent = ctx() + "k");
-
-// Same decision logic as router-proxy.mjs, in miniature.
-function decide(ev) {
-  const frac = spend() / 100;
-  const sub = ev === "sub";
-  let target = "opus", why = "under budget";
-  if (sub && $("#subrule").checked) { target = "haiku"; why = "subagent rule"; }
-  else if (frac >= C.threshold) { target = C.fallback; why = `budget ${Math.round(frac * 100)}%`; }
-  if (sub) return { model: target, why: why + " · fresh subagent conversation" };
-  const fresh = ev === "new";
-  const boundary = ev === "turn" || fresh;
-  const current = fresh ? target : (state.pin || "opus");
-  if (current === target) return { model: target, why };
-  if (fresh) return { model: target, why: why + " · new conversation, nothing cached" };
-  if (!boundary) return { model: current, why: why + " · HELD: mid tool-loop (cache + thinking chain)" };
-  if (ctx() <= C.maxCtx) return { model: target, why: why + ` · SWITCH at turn boundary (ctx ${ctx()}k ≤ 40k)`, switched: true };
-  if (frac >= C.hard) return { model: target, why: why + " · SWITCH forced past 110%", switched: true };
-  return { model: current, why: why + ` · HELD: ctx ${ctx()}k > 40k, re-caching would cost more` };
-}
-
 const wait = (ms) => new Promise((r) => setTimeout(r, reduced ? 0 : ms));
-async function move(el, path, ms) {
-  const p = $(path), len = p.getTotalLength(), t0 = performance.now();
-  el.setAttribute("opacity", 1);
-  if (reduced) { const e = p.getPointAtLength(len); el.setAttribute("cx", e.x); el.setAttribute("cy", e.y); return; }
-  await new Promise((done) => {
-    (function step(t) {
-      const k = Math.min(1, (t - t0) / ms), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-      const pt = p.getPointAtLength(len * e); el.setAttribute("cx", pt.x); el.setAttribute("cy", pt.y);
-      k < 1 ? requestAnimationFrame(step) : done();
-    })(t0);
-  });
-}
-async function moveBack(el, path, ms) {
-  const p = $(path), len = p.getTotalLength(), t0 = performance.now();
-  el.setAttribute("opacity", 1);
-  await new Promise((done) => {
-    (function step(t) {
-      const k = reduced ? 1 : Math.min(1, (t - t0) / ms), pt = p.getPointAtLength(len * (1 - k));
-      el.setAttribute("cx", pt.x); el.setAttribute("cy", pt.y);
-      k < 1 ? requestAnimationFrame(step) : done();
-    })(t0);
-  });
-}
-const label = { new: "new session", tool: "tool result", turn: "user turn", sub: "subagent" };
-const colors = { opus: "var(--opus)", sonnet: "var(--sonnet)", haiku: "var(--haiku)" };
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const COLORS = { opus: "var(--opus)", sonnet: "var(--sonnet)", haiku: "var(--haiku)" };
+const pill = (m) => `<span class="pill p-${m}">${m}</span>`;
 
+// ---------- the classifier, same rules as smart-policy.mjs ----------
+const SIMPLE_RE = /\b(what|why|where|which|who|when|how (does|do|is|are|can)|explain|show me|summari[sz]e|describe|tell me|is there|does (it|this)|list)\b/i;
+const HARD_RE = /\b(design|architect(ure)?|plan|refactor|migrat(e|ion)|rewrite|from scratch|end[- ]to[- ]end|implement|build|integrat(e|ion)|optimi[sz]e|performance|security|scal(e|ability)|whole|entire|across)\b/gi;
+const EDIT_RE = /\b(add|fix|change|update|rename|create|write|remove|delete|move|test|bump|tweak|adjust|replace)\b/gi;
+const NEG_RE = /\b(?:don'?t|do not|never|without|no need to|not)\s+(?:\w+\s+)?(?:add|fix|change|update|rename|create|write|remove|delete|move|test|bump|tweak|adjust|replace|modify|edit|touch|refactor|rewrite|build|implement|migrate|redesign)\w*/gi;
+const FILE_RE = /[\w./-]+\.(m?[jt]sx?|swift|kt|py|go|rb|java|json|md|css|s?html|ya?ml|sql|sh|toml)\b/g;
+function classify(text, trouble, first) {
+  const len = text.length, words = text.replace(FILE_RE, " ").replace(NEG_RE, " ");
+  const hard = new Set((words.match(HARD_RE) || []).map((w) => w.toLowerCase())).size;
+  const edits = new Set((words.match(EDIT_RE) || []).map((w) => w.toLowerCase())).size;
+  const files = new Set(text.match(FILE_RE) || []).size;
+  const question = SIMPLE_RE.test(words.slice(0, 80)) || /\?\s*$/.test(text);
+  let score = 0; const sig = [];
+  const add = (n, why) => { if (n) { score += n; sig.push([n, why]); } };
+  add(Math.min(hard, 3) * 2, `${hard} design/scope word${hard > 1 ? "s" : ""}`);
+  add(Math.min(edits, 2), `${edits} edit word${edits > 1 ? "s" : ""}`);
+  if (question && !edits && !hard) add(-3, "question"); else if (question) add(-1, "phrased as a question");
+  if (len < 200 && !hard) add(-1, "short");
+  if (len > 1500) add(2, "long spec");
+  if (files >= 3) add(2, `${files} files named`);
+  if (first && len > 400) add(1, "first turn of a project");
+  if ((text.match(NEG_RE) || []).length) sig.push([0, "negation ignored"]);
+  let tier = score <= -1 ? "haiku" : score >= 4 ? "opus" : "sonnet";
+  const pure = question && !edits && !hard, about = /\b(fail\w*|error\w*|bug\w*|broken|crash\w*|wrong|not working)\b/i.test(words);
+  if (trouble && tier !== "opus" && (!pure || about)) { tier = tier === "haiku" ? "sonnet" : "opus"; sig.push([1, "escalate: failures last turn"]); }
+  return { tier, score, sig };
+}
+
+const PRESETS = [
+  ["Question", "where is the admin password configured?"],
+  ["Explain, no edits", "How is the cart stored in the browser? Just explain, don't change anything."],
+  ["Small edit", "Add a rename button to the product card in src/ProductCard.jsx"],
+  ["Big build", "Design and implement the whole admin panel: auth, product CRUD and order management across the backend and frontend"],
+  ["Fix after failures", "fix the failing checkout test"],
+];
+$("#presets").innerHTML = PRESETS.map(([l], i) => `<button class="chip" data-p="${i}">${l}</button>`).join("");
+$("#presets").onclick = (e) => { const b = e.target.closest("[data-p]"); if (!b) return; const [l, t] = PRESETS[b.dataset.p]; $("#prompt").value = t; $("#trouble").checked = l === "Fix after failures"; preview(); };
+
+const state = { pin: null, busy: false, first: true };
+const ctx = () => +$("#ctx").value, spend = () => +$("#spend").value;
+$("#ctx").oninput = () => ($("#ctx-v").textContent = " " + ctx() + "k");
+$("#spend").oninput = () => { const v = spend(); $("#spend-v").textContent = " $" + v; const m = $("#meter"); m.style.width = Math.min(100, v) + "%"; m.style.background = v >= 100 ? "var(--bad)" : v >= 80 ? "var(--warn)" : "var(--good)"; };
+
+function preview() {
+  const c = classify($("#prompt").value.trim(), $("#trouble").checked, state.first);
+  const x = Math.max(-5, Math.min(8, c.score));
+  $("#needle").style.left = `calc(${((x + 5) / 13) * 100}% - 2px)`;
+  $("#signals").innerHTML = c.sig.map(([n, w]) => `<span class="sig ${n > 0 ? "pos" : n < 0 ? "neg" : ""}">${n > 0 ? "+" + n : n < 0 ? n : "·"} ${esc(w)}</span>`).join("") + `<div class="note" style="margin-top:6px">score ${c.score} → ${pill(c.tier)}</div>`;
+  requestAnimationFrame(() => document.querySelectorAll(".sig").forEach((s, i) => setTimeout(() => s.classList.add("in"), reduced ? 0 : i * 70)));
+  return c;
+}
+$("#prompt").oninput = preview; $("#trouble").onchange = preview;
+
+const RANK = { haiku: 0, sonnet: 1, opus: 2 };
+function decide(ev) {
+  if (ev === "side") return { model: "haiku", why: "side request without tools (title/summary) → Haiku at low effort", noPin: true };
+  if (ev === "tool") return state.pin ? { model: state.pin, why: "mid-turn: keep the turn's model (cache + thinking chain stay valid)" } : null;
+  const c = preview();
+  let target = c.tier, note = "";
+  if (spend() >= 100 && target === "opus") { target = "sonnet"; note = " · over budget: hard capped at Sonnet"; }
+  const fresh = !state.pin, cur = state.pin || "opus";
+  if (target === cur || fresh) return { model: target, why: `turn classified ${c.tier} (score ${c.score})${note}` };
+  const up = RANK[target] > RANK[cur], forced = spend() >= 100 && cur === "opus";
+  if (forced) note += " · switch forced at the turn boundary despite context size";
+  if (up || forced || ctx() <= 40 || target === "haiku") return { model: target, why: `turn classified ${c.tier} (score ${c.score}) · ${up ? "move up" : "switch"}${note}` };
+  return { model: cur, why: `turn classified ${c.tier}, but HELD on ${cur}: context ${ctx()}k is too large to re-cache cheaply${note}` };
+}
+
+async function along(el, path, ms, back) {
+  const p = $(path), len = p.getTotalLength(), t0 = performance.now();
+  el.setAttribute("opacity", 1);
+  await new Promise((done) => (function step(t) {
+    const k = reduced ? 1 : Math.min(1, (t - t0) / ms), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+    const pt = p.getPointAtLength(len * (back ? 1 - e : e)); el.setAttribute("cx", pt.x); el.setAttribute("cy", pt.y);
+    k < 1 ? requestAnimationFrame(step) : done();
+  })(t0));
+}
+const LABEL = { turn: "new turn", tool: "tool-loop step", side: "side request", clear: "/clear" };
 async function send(ev) {
-  if (state.busy) return; state.busy = true;
-  document.querySelectorAll("[data-ev]").forEach((b) => (b.disabled = true));
-  if (ev === "tool" && !state.pin) ev = "new";
-  const pk = $("#packet"), rp = $("#reply");
-  pk.setAttribute("fill", "var(--proxy)");
-  $("#proxy-sub").textContent = label[ev];
-  $("#w-in").classList.add("on"); $("#w-in").style.stroke = "var(--proxy)";
-  await move(pk, "#w-in", 600);
-  $("#n-proxy").classList.add("lit");
+  if (state.busy) return;
+  if (ev === "clear") { state.pin = null; state.first = true; $("#pin").textContent = "–"; $("#ctx").value = 4; $("#ctx").oninput(); log("haiku", "/clear", "history reset: next turn starts fresh, nothing cached", true); $("#decision").innerHTML = "<b>/clear</b>: the proxy sees the history shrink and treats the next turn as a new conversation."; return; }
   const d = decide(ev);
+  if (!d) { $("#decision").innerHTML = "Send a turn first: a tool-loop step continues the current turn."; return; }
+  state.busy = true; document.querySelectorAll("[data-ev]").forEach((b) => (b.disabled = true));
+  const pk = $("#packet"), rp = $("#reply");
+  $("#proxy-sub").textContent = LABEL[ev]; pk.setAttribute("fill", "var(--proxy)");
+  $("#w-in").style.stroke = "var(--proxy)";
+  await along(pk, "#w-in", 550);
+  $("#n-proxy").classList.add("lit"); $("#n-proxy rect").style.stroke = "var(--proxy)";
   $("#proxy-sub").textContent = "→ " + d.model;
-  $("#decision").innerHTML = `<b>${label[ev]}</b>: asks for <span class="pill p-opus">opus</span> → routed to <span class="pill p-${d.model}">${d.model}</span><br><span style="color:var(--muted)">${d.why}</span>${d.switched ? "<br>thinking blocks before the switch point dropped" : ""}`;
-  await wait(500);
+  $("#decision").innerHTML = `<b>${LABEL[ev]}</b>: asks for ${pill("opus")} → routed to ${pill(d.model)}<br><span class="note">${esc(d.why)}</span>`;
+  await wait(450);
   const w = "#w-" + d.model;
-  $(w).classList.add("on"); $(w).style.stroke = colors[d.model];
-  pk.setAttribute("fill", colors[d.model]);
-  await move(pk, w, 650);
-  pk.setAttribute("opacity", 0);
-  $("#n-" + d.model).classList.add("lit");
-  rp.setAttribute("fill", colors[d.model]);
-  await moveBack(rp, w, 500); await moveBack(rp, "#w-in", 450);
-  rp.setAttribute("opacity", 0);
-  if (ev !== "sub") state.pin = d.model;
-  $("#pin").innerHTML = state.pin ? `<span class="pill p-${state.pin}">${state.pin}</span>` : "–";
-  const li = document.createElement("li");
-  li.innerHTML = `<span class="pill p-${d.model}">${d.model}</span><span>${label[ev]}</span><span class="r">${d.why.split(" · ").slice(1).join(" · ") || d.why}</span>`;
-  $("#log").prepend(li);
-  await wait(250);
-  document.querySelectorAll(".wire").forEach((x) => { x.classList.remove("on"); x.style.stroke = ""; });
-  document.querySelectorAll(".node").forEach((x) => x.classList.remove("lit"));
+  $(w).style.stroke = COLORS[d.model]; pk.setAttribute("fill", COLORS[d.model]);
+  await along(pk, w, 600); pk.setAttribute("opacity", 0);
+  $("#n-" + d.model).classList.add("lit"); $(`#n-${d.model} rect`).style.stroke = COLORS[d.model];
+  rp.setAttribute("fill", COLORS[d.model]);
+  await along(rp, w, 450, true); await along(rp, "#w-in", 400, true); rp.setAttribute("opacity", 0);
+  if (!d.noPin) { state.pin = d.model; state.first = false; $("#pin").innerHTML = pill(d.model); }
+  if (ev === "tool") { $("#ctx").value = Math.min(160, ctx() + 9); $("#ctx").oninput(); }
+  log(d.model, LABEL[ev], d.why.split(" · ").slice(-1)[0]);
+  await wait(200);
+  document.querySelectorAll(".wire").forEach((x) => (x.style.stroke = ""));
+  document.querySelectorAll(".node").forEach((x) => { x.classList.remove("lit"); $("rect", x).style.stroke = ""; });
   $("#proxy-sub").textContent = "idle";
-  state.busy = false;
-  document.querySelectorAll("[data-ev]").forEach((b) => (b.disabled = false));
+  state.busy = false; document.querySelectorAll("[data-ev]").forEach((b) => (b.disabled = false));
 }
-
-async function auto() {
-  const setS = (v) => { $("#spend").value = v; $("#spend").oninput(); };
-  const setC = (v) => { $("#ctx").value = v; $("#ctx").oninput(); };
-  setS(92); setC(6); $("#log").innerHTML = ""; state.pin = null;
-  for (const [ev, s, c] of [["new", 92, 6], ["tool", 96, 14], ["sub", 97, 16], ["tool", 101, 22], ["tool", 102, 26], ["turn", 103, 30], ["tool", 104, 34]]) {
-    setS(s); setC(c); state.busy = false; await send(ev); await wait(350);
-  }
+function log(model, what, why, plain) {
+  const li = document.createElement("li");
+  li.innerHTML = `${plain ? `<span class="pill" style="background:var(--muted)">reset</span>` : pill(model)}<span>${esc(what)}</span><span class="r">${esc(why)}</span>`;
+  $("#log").prepend(li);
 }
-document.querySelectorAll("[data-ev]").forEach((b) => (b.onclick = () => (b.dataset.ev === "auto" ? auto() : send(b.dataset.ev))));
+document.querySelectorAll("[data-ev]").forEach((b) => (b.onclick = () => send(b.dataset.ev)));
+$("#spend").oninput(); preview();
 
+// ---------- 2. session replay (round 1 of the 3-round benchmark) ----------
+const TURNS = [
+  { t: "Build backend + API", a: 1.12, b: 2.08, m: "opus" },
+  { t: "Q: orders out of stock?", a: 0.39, b: 0.01, m: "haiku" },
+  { t: "Build landing + shop", a: 5.33, b: 1.15, m: "sonnet" },
+  { t: "Q: how is the cart stored?", a: 1.40, b: 0.02, m: "haiku" },
+  { t: "Build admin + final pass", a: 4.20, b: 3.38, m: "opus" },
+  { t: "Q: admin password?", a: 2.03, b: 0.00, m: "haiku" },
+  { t: "Q: npm scripts?", a: 0.23, b: 0.00, m: "haiku" },
+];
+const TOTAL_A = 14.71, TOTAL_B = 6.65;
+// Measured per turn: no plugin from its transcript, smart router from the proxy log (the remaining $0.01 is side requests).
+const scaleA = 1, scaleB = TOTAL_B / TURNS.reduce((s, x) => s + x.b, 0);
+$("#turns").innerHTML = TURNS.map((x, i) => `<div class="turn" id="tt${i}"><div class="t">${i + 1}. ${esc(x.t)}</div><div class="c">${pill(x.m)}</div><div class="c" id="tc${i}"></div></div>`).join("");
+function resetRace() {
+  $("#lane-a").innerHTML = TURNS.map((x, i) => `<i id="a${i}" style="background:var(--opus)"></i>`).join("");
+  $("#lane-b").innerHTML = TURNS.map((x, i) => `<i id="b${i}" style="background:${COLORS[x.m]}"></i>`).join("");
+  $("#cost-a").textContent = $("#cost-b").textContent = "$0.00";
+  TURNS.forEach((x, i) => { $("#tt" + i).classList.remove("on"); $("#tc" + i).textContent = ""; });
+}
+resetRace();
 $("#race").onclick = async () => {
-  const segs = { h1: 46, h2: 14, h3: 40, p1: 40 };
-  for (const id in segs) { const s = $("#" + id); s.style.transition = "none"; s.style.left = "0"; s.style.width = "0"; }
-  $("#hc").textContent = $("#pc").textContent = "–";
-  await wait(50);
-  const run = async (id, left, w, ms) => { const s = $("#" + id); s.style.transition = reduced ? "none" : `width ${ms}ms linear`; s.style.left = left + "%"; s.style.width = w + "%"; await wait(ms); };
-  await Promise.all([
-    (async () => { await run("h1", 0, 46, 1400); await run("h2", 46, 14, 500); await run("h3", 60, 40, 1200); $("#hc").textContent = "+31% vs. no router (measured)"; $("#hc").style.color = "var(--bad)"; })(),
-    (async () => { await run("p1", 0, 40, 1200); $("#pc").textContent = "code billed at Sonnet rates (not yet measured)"; $("#pc").style.color = "var(--haiku)"; })(),
-  ]);
+  $("#race").disabled = true; resetRace(); await wait(60);
+  let A = 0, B = 0;
+  for (let i = 0; i < TURNS.length; i++) {
+    const x = TURNS[i], a = x.a * scaleA, b = x.b * scaleB;
+    A += a; B += b;
+    $("#tt" + i).classList.add("on"); $("#tt" + i).style.borderColor = COLORS[x.m];
+    $("#a" + i).style.width = (a / TOTAL_A) * 100 + "%";
+    $("#b" + i).style.width = (b / TOTAL_A) * 100 + "%";
+    $("#tc" + i).textContent = `$${a.toFixed(2)} → $${b.toFixed(2)}`;
+    $("#cost-a").textContent = "$" + A.toFixed(2); $("#cost-b").textContent = "$" + B.toFixed(2);
+    await wait(750);
+  }
+  $("#cost-b").textContent = `$${B.toFixed(2)} (−${Math.round((1 - B / A) * 100)}%)`;
+  $("#race").disabled = false;
 };
+
+// ---------- 3. team gateway ----------
+const TEAM = [
+  { id: "ana", name: "Ana", team: "Payments", spend: 76, limit: 300, rule: "downgrade", cap: null },
+  { id: "dana", name: "Dana", team: "Platform", spend: 91, limit: 80, rule: "downgrade", cap: null },
+  { id: "eli", name: "Eli", team: "Web", spend: 30, limit: 30, rule: "block", cap: null },
+  { id: "hana", name: "Hana", team: "Data", spend: 1, limit: 100, rule: "downgrade", cap: "haiku" },
+];
+function status(e) {
+  if (e.spend >= e.limit) return e.rule === "block" ? ["var(--bad)", "×", "Over limit: blocked"] : ["#ec835a", "↓", "Over limit: downgraded"];
+  if (e.spend >= 0.8 * e.limit) return ["var(--warn)", "!", "Near limit"];
+  return ["var(--good)", "✓", "Within limit"];
+}
+function outcome(e) {
+  if (e.spend >= e.limit && e.rule === "block") return { model: null, text: "403 · budget reached" };
+  if (e.cap === "haiku") return { model: "haiku", text: "Haiku (manager cap)" };
+  if (e.spend >= e.limit) return { model: "sonnet", text: "Sonnet (over limit)" };
+  return { model: "opus", text: "Opus (hard turn)" };
+}
+function rowHtml(e) {
+    const [c, icon, label] = status(e);
+    return `<div class="eng" id="e-${e.id}">
+      <div class="who"><b>${e.name}</b><span>${e.team} · $${e.spend} of $${e.limit}${e.cap ? " · cap: Haiku" : ""}</span>
+        <div style="margin-top:4px"><span class="badge"><span class="dot" style="background:${c}"></span><span aria-hidden="true">${icon}</span>${label}</span></div></div>
+      <div class="track"><div class="gate"></div><div class="ball"></div><div class="out"></div></div>
+      <div class="acts"><button class="primary" data-send="${e.id}">Send request</button>${e.rule === "block" ? `<button data-top="${e.id}">Top up +$10</button>` : ""}${e.id === "dana" ? `<button data-cap="${e.id}">${e.cap ? "Remove cap" : "Cap: Haiku"}</button>` : ""}${e.id === "ana" ? `<button data-lower="${e.id}">Lower limit to $50</button>` : ""}</div>
+    </div>`;
+}
+const renderTeam = () => ($("#team").innerHTML = TEAM.map(rowHtml).join(""));
+const renderRow = (e) => ($("#e-" + e.id).outerHTML = rowHtml(e));
+renderTeam();
+$("#team").onclick = async (ev) => {
+  const b = ev.target.closest("button"); if (!b) return;
+  const id = b.dataset.send || b.dataset.top || b.dataset.cap || b.dataset.lower, e = TEAM.find((x) => x.id === id);
+  if (b.dataset.top) { e.limit += 10; renderRow(e); return; }
+  if (b.dataset.cap) { e.cap = e.cap ? null : "haiku"; renderRow(e); return; }
+  if (b.dataset.lower) { e.limit = 50; renderRow(e); return; }
+  const row = $("#e-" + id), ball = $(".ball", row), out = $(".out", row), o = outcome(e);
+  b.disabled = true; out.textContent = "";
+  ball.style.transition = "none"; ball.style.left = "6px"; ball.style.opacity = 1; ball.style.background = "var(--proxy)";
+  await wait(30);
+  ball.style.transition = reduced ? "none" : "left .5s ease-in";
+  ball.style.left = "calc(50% - 20px)"; await wait(520);
+  if (!o.model) {
+    ball.style.background = "var(--bad)"; ball.style.transition = reduced ? "none" : "left .45s ease-out";
+    ball.style.left = "6px"; out.innerHTML = `<span class="pill p-blocked">blocked</span> ${o.text}`;
+  } else {
+    ball.style.background = COLORS[o.model]; ball.style.transition = reduced ? "none" : "left .55s ease-out";
+    ball.style.left = "calc(100% - 180px)"; await wait(560);
+    out.innerHTML = `${pill(o.model)} ${o.text.replace(/^\w+ /, "")}`;
+    e.spend = Math.round((e.spend + (o.model === "opus" ? 3 : o.model === "sonnet" ? 1 : 0.1)) * 10) / 10;
+    const who = $(".who span", row); who.textContent = `${e.team} · ${e.spend} of ${e.limit}${e.cap ? " · cap: Haiku" : ""}`;
+    const [c, icon, label] = status(e); $(".badge", row).innerHTML = `<span class="dot" style="background:${c}"></span><span aria-hidden="true">${icon}</span>${label}`;
+  }
+  await wait(500); ball.style.opacity = 0; b.disabled = false;
+};
+
+// ---------- 4. terminal with a hint ----------
+const term = $("#term");
+async function typeLine(cls, text, speed = 22) {
+  const line = document.createElement("div"); line.className = cls; term.appendChild(line);
+  for (const ch of text) { line.textContent += ch; await wait(speed); }
+  return line;
+}
+async function playTerm() {
+  $("#play-term").disabled = true; term.innerHTML = "";
+  $("#hb1").style.width = $("#hb2").style.width = "0"; $("#hv1").textContent = $("#hv2").textContent = "–";
+  await typeLine("dim", "$ claude   # through the team gateway", 8);
+  await typeLine("you", "> build the whole settings page end-to-end", 28);
+  const work = document.createElement("div"); work.className = "dim"; term.appendChild(work);
+  let req = 0, cost = 0;
+  for (let i = 0; i < 31; i++) { req++; cost += 0.077; work.textContent = `  ⏺ searching, reading, editing…  ${req} requests · $${cost.toFixed(2)}`; await wait(55); }
+  await typeLine("ok", "  ✓ Settings page added: 9 files changed.", 10);
+  await wait(400);
+  const h = document.createElement("div"); h.className = "hintline"; term.appendChild(h);
+  const hint = "💡 token-saver: This turn cost $2.40 over 31 requests. Big one-line requests make Claude explore and plan on the expensive model. Split it: ask for a short plan first, then build one part per turn. In your team, turns that do this averaged $0.90 vs $2.10.";
+  for (const ch of hint) { h.textContent += ch; await wait(6); }
+  await typeLine("dim", "  (shown to you only; not added to the conversation)", 6);
+  $("#hb1").style.width = "100%"; $("#hv1").textContent = "$2.40";
+  await wait(1100);
+  await typeLine("you", "> plan the settings page: list the sections and files, no code yet", 22);
+  await typeLine("dim", "  ⏺ 4 requests · $0.12", 6);
+  await typeLine("you", "> build the profile section in src/settings/Profile.jsx; `npm test` should pass", 22);
+  const w2 = document.createElement("div"); w2.className = "dim"; term.appendChild(w2);
+  let r2 = 0, c2 = 0;
+  for (let i = 0; i < 12; i++) { r2++; c2 += 0.06; w2.textContent = `  ⏺ editing…  ${r2} requests · $${c2.toFixed(2)}`; await wait(55); }
+  await typeLine("ok", "  ✓ Profile section added, tests pass.", 10);
+  term.insertAdjacentHTML("beforeend", `<div><span class="you">&gt; </span><span class="caret"></span></div>`);
+  $("#hb2").style.width = ((0.12 + c2) / 2.4) * 100 + "%"; $("#hv2").textContent = "$" + (0.12 + c2).toFixed(2);
+  $("#play-term").disabled = false;
+}
+$("#play-term").onclick = playTerm;
+term.innerHTML = `<div class="dim">$ claude   # through the team gateway</div><div><span class="you">&gt; </span><span class="caret"></span></div>`;
 </script>
 </body>
 </html>
