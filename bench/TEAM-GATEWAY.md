@@ -10,6 +10,10 @@ Code: [`team/gateway.mjs`](../plugins/token-saver/team/gateway.mjs) (server and 
 
 ## Run it
 
+Quickest: from the repo root, `./start-gateway.sh` starts an empty team on http://127.0.0.1:8790/admin (admin token `local-admin`). `./start-gateway.sh --demo` starts a made-up 30-day demo team on port 8791 (token `demo-admin`). Add `--restart` to stop whatever already holds the port. Any variable below can be set before the command to override its default.
+
+Or start it directly:
+
 ```bash
 TOKEN_SAVER_ADMIN_TOKEN=<long random string> \
 TOKEN_SAVER_TEAM_API_KEY=sk-ant-... \
