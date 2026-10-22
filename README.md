@@ -211,7 +211,8 @@ Added to `~/.claude/settings.json` only where you haven't set your own value:
 | `/token-saver:review-diff [base]` | Reviews only the git diff, not whole files; reports real issues only. |
 | `/token-saver:deep <request>` | Runs one request at **high effort**: deeper reasoning and more thorough tests, for hard bugs, design decisions and big features. The next message goes back to your normal effort. |
 | `/token-saver:budget <amount> [reset-day]\|status\|off` | Sets or shows your monthly budget; the status line tracks spend and Claude warns at 50/80/95/100%. |
-| `/token-saver:router on\|off\|status` | Toggles the experimental Opus → Sonnet router for the current project (off by default). |
+| `/token-saver:router on\|off\|status` | Toggles the experimental Opus → Sonnet hook router for the current project (off by default). |
+| `/token-saver:smart-router on\|off\|status` | Turns the routing proxy's model routing on or off. Off keeps your requests going through the proxy or team gateway (budgets, limits, logging), but every request uses the model you picked. Takes effect at your next message. |
 
 The biggest single habit: **`/token-saver:handoff` → `/clear` → `/token-saver:resume`** whenever a session gets long or you switch tasks.
 
@@ -288,6 +289,7 @@ plugins/token-saver/
     budget-lib.mjs                  monthly spend ledger shared by status line and hook
     budget-watch.mjs                budget warnings at 50/80/95/100%
     prompt-hint.mjs                 Stop hook: shows the team gateway's prompt hint after a costly turn
+    smart-router.mjs                /token-saver:smart-router: routing on/off on the local proxy or team gateway
     model-switch.mjs                tracks /model changes
     lib.mjs                         shared helpers and thresholds
   proxy/router-proxy.mjs            experimental routing proxy (ANTHROPIC_BASE_URL), see bench/ROUTING-PROXY.md

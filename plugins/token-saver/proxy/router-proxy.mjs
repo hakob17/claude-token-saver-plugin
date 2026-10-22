@@ -42,6 +42,10 @@ export const CFG = {
   ownBudget: Number(env.TOKEN_SAVER_PROXY_BUDGET || 0),
   spendTtlMs: Number(env.TOKEN_SAVER_PROXY_SPEND_TTL_MS ?? 10_000),
   log: env.TOKEN_SAVER_PROXY_LOG || path.join(DIR, "proxy-log.jsonl"),
+  // Routing on/off without restarting: the plugin's /token-saver:smart-router writes this file.
+  prefsFile: path.join(DIR, "proxy.json"),
+  prefsTtlMs: Number(env.TOKEN_SAVER_PROXY_PREFS_TTL_MS ?? 2000),
+  routing: env.TOKEN_SAVER_PROXY_ROUTING || "on", // default when nothing else says
 };
 const EXPENSIVE = /opus|fable|mythos/i;
 
@@ -187,6 +191,7 @@ let ownSpend = 0;
 // Optional hooks for a multi-user gateway (see ../team/gateway.mjs). All optional:
 //   route(req, res) -> true if handled; identify(req) -> user | null (null = 401);
 //   budget(user) -> { spend, limit }; adjust(user, d, requested, pin) -> d; gate(user, requested) -> error text | null;
+//   routing(user) -> true/false/undefined (that engineer's routing preference);
 //   headers(headers, req, user) -> mutate outgoing headers; onRequest(user, body, info) -> observe; onLog(entry).
 let H = {};
 
@@ -199,6 +204,35 @@ function budget() {
   }
   return spendCache;
 }
+// Is routing switched off for this request? First match wins:
+//   1. header x-token-saver-routing: on|off (per session, e.g. via ANTHROPIC_CUSTOM_HEADERS)
+//   2. the engineer's preference on a team gateway (hook)
+//   3. ~/.claude/token-saver/proxy.json {"routing": "on"|"off"} (written by /token-saver:smart-router)
+//   4. TOKEN_SAVER_PROXY_ROUTING (default on)
+// Off means: Claude Code's requested model is used as is. Budget rules still apply.
+const OFF = /^(0|off|false|no)$/i, ON = /^(1|on|true|yes)$/i;
+let prefsCache = { at: -Infinity, routing: null };
+function filePrefs() {
+  if (Date.now() - prefsCache.at >= CFG.prefsTtlMs) {
+    let routing = null;
+    try { routing = JSON.parse(fs.readFileSync(CFG.prefsFile, "utf8")).routing ?? null; } catch {}
+    prefsCache = { at: Date.now(), routing };
+  }
+  return prefsCache;
+}
+export function routingOff(headers = {}, user) {
+  const h = String(headers["x-token-saver-routing"] || "");
+  if (OFF.test(h)) return "header";
+  if (ON.test(h)) return false;
+  const u = user && H.routing ? H.routing(user) : undefined;
+  if (u === false) return "engineer setting";
+  if (u === true) return false;
+  const f = String(filePrefs().routing ?? "");
+  if (OFF.test(f)) return "plugin setting";
+  if (ON.test(f)) return false;
+  return OFF.test(CFG.routing) ? "proxy default" : false;
+}
+
 function log(entry) {
   try { H.onLog?.(entry); } catch {}
   try { fs.appendFileSync(CFG.log, JSON.stringify({ ts: new Date().toISOString(), ...entry }) + "\n"); } catch {}
@@ -213,6 +247,7 @@ const agent = new lib.Agent({ keepAlive: true });
 function forward(req, bodyBuf, onResponse, extraBeta) {
   const headers = {};
   for (const [k, v] of Object.entries(req.headers)) if (!HOP.has(k)) headers[k] = v;
+  delete headers["x-token-saver-routing"];
   H.headers?.(headers, req, req.tsUser);
   headers["accept-encoding"] = "identity"; // so usage can be read off the stream
   if (extraBeta && !String(headers["anthropic-beta"] || "").includes(extraBeta))
@@ -284,7 +319,7 @@ function handle(req, res) {
   }
   if (req.method === "GET" && req.url === "/token-saver/status") {
     res.writeHead(200, { "content-type": "application/json" });
-    return res.end(JSON.stringify({ config: CFG, budget: budget(), conversations: Object.fromEntries(pins) }, null, 2));
+    return res.end(JSON.stringify({ config: CFG, routing: routingOff() ? `off (${routingOff()})` : "on", budget: budget(), conversations: Object.fromEntries(pins) }, null, 2));
   }
   const chunks = [];
   req.on("data", (c) => chunks.push(c));
@@ -312,12 +347,16 @@ function handle(req, res) {
       return deny(res, 403, "permission_error", blocked);
     }
     const beta = String(req.headers["anthropic-beta"] || "");
+    const off = routingOff(req.headers, user);
+    // Routing off: only the budget rules remain (no smart tiers, no subagent rule).
     let d = decide({
       requested: body.model, sub: isSubagent(body), boundary: isTurnBoundary(body),
       fresh: !pin && n <= 1, ctx: estTokens(raw), pin, spend, limit,
-    });
+    }, off ? { ...CFG, subagents: "off" } : CFG);
+    if (off) d.reason = /^budget/.test(d.reason) ? `routing off (${off}), budget rule: ${d.reason}`
+      : `routing off (${off}): ${d.reason.replace(/^(default|not-expensive)/, "requested model")}`;
 
-    if (CFG.policy === "smart" && EXPENSIVE.test(body.model)) {
+    if (!off && CFG.policy === "smart" && EXPENSIVE.test(body.model)) {
       d = decideSmart({
         requested: body.model, messages: body.messages, sub: isSubagent(body), aux: !(Array.isArray(body.tools) && body.tools.length),
         boundary: isTurnBoundary(body), fresh: !pin && n <= 1, ctx: estTokens(raw), pin, overBudget: limit > 0 && spend / limit >= CFG.threshold,

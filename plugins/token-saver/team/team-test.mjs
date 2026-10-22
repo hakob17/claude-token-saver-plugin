@@ -169,5 +169,29 @@ await turnIn("abcdef12-3456-7890-abcd-000000000003", "Build the whole thing end-
 assert.equal((await hintOf("abcdef12-3456-7890-abcd-000000000003", eve.key)).hint, null, "hints off");
 assert.ok(Array.isArray((await admin("/admin/api/overview")).json.prompts.patterns));
 
+// 12. smart routing off per engineer (/token-saver:smart-router talks to /token-saver/prefs): requested model kept,
+// but manager rules still apply (a model cap still caps).
+const gil = (await admin("/admin/api/engineers", "POST", { name: "Gil", modelCap: "sonnet" })).json;
+const fay = (await admin("/admin/api/engineers", "POST", { name: "Fay" })).json;
+const prefs = (k, body) => fetch(base + "/token-saver/prefs", { method: body ? "POST" : "GET", headers: { "x-token-saver-key": k, "content-type": "application/json" }, ...(body && { body: JSON.stringify(body) }) }).then(async (r) => ({ status: r.status, ...(await r.json()) }));
+assert.equal((await prefs(fay.key)).routing, true, "routing on by default");
+assert.equal((await prefs("tsk_nope")).status, 401);
+const tool = path.join(path.dirname(fileURLToPath(import.meta.url)), "../scripts/smart-router.mjs");
+const runTool = (args, env) => new Promise((resolve) => {
+  const p = spawn(process.execPath, [tool, ...args], { env: { ...process.env, ...env } });
+  let stdout = ""; p.stdout.on("data", (c) => (stdout += c)); p.on("close", () => resolve(stdout));
+});
+const said = await runTool(["off"], { ANTHROPIC_BASE_URL: base, ANTHROPIC_CUSTOM_HEADERS: `x-token-saver-key: ${fay.key}` });
+assert.match(said, /Smart routing: OFF/, "the plugin command turns it off on the gateway");
+assert.equal(store.get("fay").routing, false);
+r = await ask({ "x-api-key": fay.key }, "where is the admin password configured?");
+assert.equal(r.up.body.model, "claude-opus-5", "routing off: a simple question stays on the requested model");
+assert.equal(store.events.at(-1).category, "Routing off: requested model");
+await prefs(gil.key, { routing: false });
+r = await ask({ "x-api-key": gil.key }, HARD);
+assert.equal(r.up.body.model, "claude-sonnet-5-5", "a manager cap still applies with routing off");
+assert.ok(store.audit().some((a) => a.engineer === "fay" && a.by === "fay" && a.to.routing === false), "self-service change is audited");
+assert.match(await runTool(["status"], { ANTHROPIC_BASE_URL: base, ANTHROPIC_CUSTOM_HEADERS: `x-token-saver-key: ${fay.key}` }), /OFF/);
+
 console.log(`ok — team gateway: ${seen.length} upstream calls, ${store.events.length} usage records, ${audit.length} audit entries`);
 server.close(); fs.rmSync(home, { recursive: true, force: true }); process.exit(0);

@@ -15,6 +15,7 @@ Object.assign(process.env, {
   TOKEN_SAVER_PROXY_LOG: path.join(home, "log.jsonl"),
   TOKEN_SAVER_PROXY_CTX_EDIT_AT: "3000", // est. tokens (~12k chars) so tests can cross it
   TOKEN_SAVER_PROXY_MAX_SWITCH_CTX: "2000",
+  TOKEN_SAVER_PROXY_PREFS_TTL_MS: "0", // re-read proxy.json on every request
 });
 const { classifyTurn, decideSmart } = await import("./smart-policy.mjs");
 const { start } = await import("./router-proxy.mjs");
@@ -137,9 +138,22 @@ assert.equal(s.body.model, "claude-sonnet-5-5");
 s = await send({ model: "claude-sonnet-5-5", ...meta, tools, messages: [{ role: "user", content: "Design the whole thing end-to-end" }] });
 assert.equal(s.body.model, "claude-sonnet-5-5");
 
+// 10. routing off by header: the requested model is used as is, and the header isn't forwarded
+const q = (session, headers = {}) => fetch("http://127.0.0.1:18797/v1/messages", { method: "POST", headers: { "content-type": "application/json", ...headers },
+  body: JSON.stringify({ model: opus, stream: true, tools, metadata: { user_id: `user_x_account_y_session_${session}` }, messages: [{ role: "user", content: "where is the admin password configured?" }] }) }).then((r) => r.text()).then(() => seen.at(-1));
+s = await q("5ma7-0010", { "x-token-saver-routing": "off" });
+assert.equal(s.body.model, opus, "routing off: requested model kept");
+assert.equal(s.body.output_config?.effort, undefined, "routing off: effort untouched");
+// 11. routing off by the plugin setting (proxy.json, written by /token-saver:smart-router); a header "on" wins
+fs.writeFileSync(path.join(home, "proxy.json"), JSON.stringify({ routing: "off" }));
+assert.equal((await q("5ma7-0011")).body.model, opus, "plugin setting off");
+assert.equal((await q("5ma7-0012", { "x-token-saver-routing": "on" })).body.model, "claude-haiku-5-5", "header on overrides the file");
+fs.rmSync(path.join(home, "proxy.json"));
+assert.equal((await q("5ma7-0013")).body.model, "claude-haiku-5-5", "back on when the setting is removed");
+
 const log = fs.readFileSync(path.join(home, "log.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
 assert.ok(log.some((e) => e.usage?.applied_edits?.[0]?.cleared_tool_uses === 2), "applied context edits are logged");
 assert.ok(log.some((e) => e.tier === "hard" && e.signals?.length), "classifier signals are logged");
-console.log(`ok — ${cases.length + 1} classifier cases, 9 proxy scenarios, ${seen.length} upstream calls`);
+console.log(`ok — ${cases.length + 1} classifier cases, 11 proxy scenarios, ${seen.length} upstream calls`);
 for (const e of log.filter((x) => x.requested)) console.log(`  ${e.requested} -> ${e.routed}  [${e.reason}]${e.ctxEdit ? " +ctx-edit" : ""}`);
 proxy.close(); fs.rmSync(home, { recursive: true, force: true }); process.exit(0);

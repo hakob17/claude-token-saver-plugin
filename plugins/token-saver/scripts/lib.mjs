@@ -161,3 +161,14 @@ export function routerEnabled(cwd) {
     return false;
   }
 }
+
+// Where Claude Code's requests go, and the token-saver gateway key if there is one.
+// The key comes from TOKEN_SAVER_KEY, the x-token-saver-key custom header, or a tsk_ API key/token.
+export function gatewayInfo(env = process.env) {
+  const base = String(env.ANTHROPIC_BASE_URL || "").replace(/\/$/, "");
+  const header = /(?:^|\n|,)\s*x-token-saver-key\s*:\s*(tsk_[\w-]+)/i.exec(env.ANTHROPIC_CUSTOM_HEADERS || "");
+  const key = env.TOKEN_SAVER_KEY || header?.[1] ||
+    [env.ANTHROPIC_API_KEY, env.ANTHROPIC_AUTH_TOKEN].find((k) => String(k || "").startsWith("tsk_")) || "";
+  const routingHeader = /(?:^|\n|,)\s*x-token-saver-routing\s*:\s*(\w+)/i.exec(env.ANTHROPIC_CUSTOM_HEADERS || "")?.[1] || "";
+  return { base, key, routingHeader };
+}

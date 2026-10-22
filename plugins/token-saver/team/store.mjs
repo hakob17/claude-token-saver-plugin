@@ -71,7 +71,7 @@ export function openStore(dir) {
       let id = slug(name), i = 2;
       while (state.engineers[id]) id = `${slug(name)}-${i++}`;
       const key = newKey();
-      const e = { id, name: String(name), team: String(team), monthlyLimit: Number(monthlyLimit) || 0, overLimit, modelCap, active: true, hints: true, keyHash: hash(key), keyHint: key.slice(-4), createdAt: new Date().toISOString() };
+      const e = { id, name: String(name), team: String(team), monthlyLimit: Number(monthlyLimit) || 0, overLimit, modelCap, active: true, hints: true, routing: true, keyHash: hash(key), keyHint: key.slice(-4), createdAt: new Date().toISOString() };
       check(e);
       state.engineers[id] = e; byKey.set(e.keyHash, e);
       audit(id, "create", { by, to: { monthlyLimit: e.monthlyLimit, overLimit, modelCap } });
@@ -80,7 +80,7 @@ export function openStore(dir) {
     update(id, patch, by = "manager") {
       const e = state.engineers[id];
       if (!e) throw new Error("no such engineer");
-      const fields = ["name", "team", "monthlyLimit", "overLimit", "modelCap", "active", "hints"];
+      const fields = ["name", "team", "monthlyLimit", "overLimit", "modelCap", "active", "hints", "routing"];
       const next = { ...e };
       for (const f of fields) if (f in patch) next[f] = f === "monthlyLimit" ? Number(patch[f]) || 0 : patch[f];
       check(next);
@@ -117,4 +117,5 @@ function check(e) {
   if (!(e.monthlyLimit >= 0)) throw new Error("monthlyLimit must be >= 0");
   if (typeof e.active !== "boolean") throw new Error("active must be true or false");
   if (e.hints !== undefined && typeof e.hints !== "boolean") throw new Error("hints must be true or false");
+  if (e.routing !== undefined && typeof e.routing !== "boolean") throw new Error("routing must be true or false");
 }

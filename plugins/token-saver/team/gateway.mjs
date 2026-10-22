@@ -37,6 +37,7 @@ const DAY = 86_400_000;
 // What the router did with a request, in words a manager can read.
 export function category(reason = "", requested = "", routed = "") {
   if (reason === "blocked") return "Blocked: over limit or disabled";
+  if (reason.startsWith("routing off")) return /budget rule: budget/.test(reason) ? "Over limit → Sonnet" : "Routing off: requested model";
   if (reason.startsWith("manager cap")) return "Manager model cap";
   if (reason === "fail-open") return "Fail-open (kept requested model)";
   if (reason.startsWith("side request")) return "Side request → Haiku";
@@ -85,6 +86,22 @@ export function gatewayHooks(store, team = TEAM) {
   };
   return {
     route(req, res) {
+      // An engineer's own settings, with their gateway key (used by /token-saver:smart-router).
+      if (req.url.startsWith("/token-saver/prefs") && (req.method === "GET" || req.method === "POST")) {
+        const u = userOf(req);
+        if (!u) { send(res, 401, { error: "unknown key" }); return true; }
+        (async () => {
+          try {
+            if (req.method === "POST") {
+              const b = await readJson(req), patch = {};
+              for (const k of ["routing", "hints"]) if (k in b) patch[k] = b[k];
+              store.update(u.id, patch, u.id);
+            }
+            send(res, 200, { engineer: u.name, routing: u.routing !== false, hints: u.hints !== false });
+          } catch (e) { send(res, 400, { error: e.message }); }
+        })();
+        return true;
+      }
       if (req.method === "GET" && req.url.startsWith("/token-saver/hint")) {
         const u = userOf(req);
         if (!u) { send(res, 401, { error: "unknown key" }); return true; }
@@ -107,6 +124,8 @@ export function gatewayHooks(store, team = TEAM) {
       if (t && Array.isArray(last?.content)) t.errors += last.content.filter((b) => b?.type === "tool_result" && b.is_error).length;
     },
     identify: userOf,
+    // On a shared gateway the engineer's own setting decides (never the gateway host's local file).
+    routing: (u) => u.routing !== false,
     budget: (u) => ({ spend: store.monthSpend(u.id), limit: store.effectiveLimit(u.id) }),
     gate(u) {
       if (!u.active) return `token-saver: your gateway access is disabled. Ask your manager.`;

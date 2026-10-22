@@ -307,7 +307,7 @@ function meter(e) {
   const c = e.usedPct >= 100 ? (e.overLimit === "block" ? "var(--critical)" : "var(--serious)") : e.usedPct >= 80 ? "var(--warning)" : "var(--good)";
   return `<div class="meter"><div class="track"><div class="fill" style="width:${p}%;background:${c}"></div></div><div class="txt">${usd(e.monthSpend, 2)} of ${usd(e.effectiveLimit)}${e.credits ? ` <span class="small">(incl. ${usd(e.credits)} top-up)</span>` : ""}</div></div>`;
 }
-const rule = (e) => `<span class="pill">${e.overLimit === "block" ? "Block at limit" : "Downgrade at limit"}</span>${e.modelCap ? `<span class="pill">Cap: ${e.modelCap === "haiku" ? "Haiku" : "Sonnet"}</span>` : ""}`;
+const rule = (e) => `<span class="pill">${e.overLimit === "block" ? "Block at limit" : "Downgrade at limit"}</span>${e.modelCap ? `<span class="pill">Cap: ${e.modelCap === "haiku" ? "Haiku" : "Sonnet"}</span>` : ""}${e.routing === false ? `<span class="pill" title="Smart routing turned off: requests use the model Claude Code asks for. Limits and caps still apply.">Routing off</span>` : ""}`;
 const ago = (ts) => { if (!ts) return "—"; const m = (Date.now() - Date.parse(ts)) / 60000; return m < 60 ? `${Math.max(1, Math.round(m))} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
 
 // ---------- page ----------
@@ -367,12 +367,12 @@ function renderPatterns() {
 }
 function auditLine(a) {
   const who = data?.engineers.find((e) => e.id === a.engineer)?.name || a.engineer;
-  const f = (k, v) => k === "monthlyLimit" ? (v ? usd(v) : "no limit") : k === "modelCap" ? (v ? `up to ${v}` : "no cap") : k === "active" || k === "hints" ? (v === false ? "off" : "on") : k === "overLimit" ? (v === "block" ? "block at limit" : "downgrade at limit") : v;
-  const label = { monthlyLimit: "limit", modelCap: "model cap", active: "access", overLimit: "rule", name: "name", team: "team", hints: "prompt hints" };
+  const f = (k, v) => k === "monthlyLimit" ? (v ? usd(v) : "no limit") : k === "modelCap" ? (v ? `up to ${v}` : "no cap") : k === "active" || k === "hints" || k === "routing" ? (v === false ? "off" : "on") : k === "overLimit" ? (v === "block" ? "block at limit" : "downgrade at limit") : v;
+  const label = { monthlyLimit: "limit", modelCap: "model cap", active: "access", overLimit: "rule", name: "name", team: "team", hints: "prompt hints", routing: "smart routing" };
   let what = a.action === "credit" ? `${a.amount > 0 ? "topped up" : "reduced"} by ${usd(Math.abs(a.amount))}`
     : a.action === "create" ? "added" : a.action === "rotate-key" ? "key rotated"
     : Object.keys(a.to || {}).map((k) => `${label[k] || k}: ${f(k, a.from?.[k])} → ${f(k, a.to[k])}`).join(", ");
-  return `<li><time>${esc(new Date(a.at).toLocaleString())}</time><b>${esc(who)}</b> — ${esc(what)}${a.note ? ` <span class="small">“${esc(a.note)}”</span>` : ""}</li>`;
+  return `<li><time>${esc(new Date(a.at).toLocaleString())}</time><b>${esc(who)}</b> — ${esc(what)}${a.by === a.engineer ? ' <span class="small">(changed by the engineer)</span>' : ""}${a.note ? ` <span class="small">“${esc(a.note)}”</span>` : ""}</li>`;
 }
 
 // ---------- engineer drawer ----------
@@ -430,7 +430,8 @@ function renderDrawer(d) {
         <button class="btn ${e.active ? "danger" : ""}" id="actGo">${e.active ? "Disable access" : "Enable access"}</button>
         <button class="btn" id="keyGo">Rotate key</button>
       </div>
-      <label class="row" style="margin-top:12px;font-size:13px"><input type="checkbox" id="hintsGo" ${e.hints !== false ? "checked" : ""}> Show private prompt hints after costly turns</label>
+      <label class="row" style="margin-top:12px;font-size:13px"><input type="checkbox" id="routingGo" ${e.routing !== false ? "checked" : ""}> Smart routing (off: use the model Claude Code asks for; limits and caps still apply)</label>
+      <label class="row" style="margin-top:6px;font-size:13px"><input type="checkbox" id="hintsGo" ${e.hints !== false ? "checked" : ""}> Show private prompt hints after costly turns</label>
     </section>
 
     <section>
@@ -465,6 +466,7 @@ function renderDrawer(d) {
   drawer.querySelectorAll("input[name=ol]").forEach((r) => r.onchange = () => act(() => api(`/admin/api/engineers/${e.id}`, "PATCH", { overLimit: r.value }), "Rule saved"));
   drawer.querySelectorAll("input[name=cap]").forEach((r) => r.onchange = () => act(() => api(`/admin/api/engineers/${e.id}`, "PATCH", { modelCap: r.value || null }), "Model cap saved"));
   $("#actGo").onclick = () => { if (e.active && !confirm(`Disable gateway access for ${e.name}? Their requests will be refused until re-enabled.`)) return; act(() => api(`/admin/api/engineers/${e.id}`, "PATCH", { active: !e.active }), e.active ? "Access disabled" : "Access enabled"); };
+  $("#routingGo").onchange = (ev) => act(() => api(`/admin/api/engineers/${e.id}`, "PATCH", { routing: ev.target.checked }), ev.target.checked ? "Smart routing on" : "Smart routing off");
   $("#hintsGo").onchange = (ev) => act(() => api(`/admin/api/engineers/${e.id}`, "PATCH", { hints: ev.target.checked }), ev.target.checked ? "Prompt hints on" : "Prompt hints off");
   $("#keyGo").onclick = async () => { if (!confirm(`Rotate ${e.name}'s key? The old key stops working immediately.`)) return; try { const { key } = await api(`/admin/api/engineers/${e.id}/rotate-key`, "POST"); showKey(e.name, key); load(); } catch (err) { toast(err.message); } };
 }

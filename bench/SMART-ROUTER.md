@@ -49,6 +49,19 @@ Other rules:
 
 Every decision is logged with its tier, score and signals (`~/.claude/token-saver/proxy-log.jsonl`), so a misroute can be traced and the weights tuned.
 
+## Turning routing off
+
+Run `/token-saver:smart-router off` to stop routing without leaving the proxy. Requests still go through the proxy and are still logged, but each one uses the model Claude Code asked for: no tiers, no Haiku for side requests, no effort changes. Budget rules still apply, so over budget the budget failover still moves you to Sonnet. Run `/token-saver:smart-router on` to turn it back on, or `status` to check. Either change takes effect at your next message, with no restart.
+
+Where the setting lives (first match wins):
+
+1. **The header `x-token-saver-routing: on|off`.** Per session, for example `ANTHROPIC_CUSTOM_HEADERS="x-token-saver-routing: off"`.
+2. **On a team gateway, the engineer's own setting.** Changed by the same command with their gateway key, or by a manager in the dashboard.
+3. **For a local proxy, `~/.claude/token-saver/proxy.json`** (`{"routing": "off"}`), which the command writes. The proxy re-reads it every 2 seconds.
+4. **The proxy's start-up default, `TOKEN_SAVER_PROXY_ROUTING`** (`on` unless set).
+
+If you turn routing back on in the middle of a conversation, the change applies from the next turn boundary, the same rule as any other switch.
+
 ## 2. Context management
 
 Long sessions pay twice for stale context: input tokens on every request, and a model whose attention is spread over file contents read 50 steps ago. **Off by default** (see the benchmark: each clearing rebuilt the cache and cost more than it saved within a turn). With `TOKEN_SAVER_PROXY_CTX_EDIT_AT=150000`, once a conversation passes that size the proxy adds the API's server-side tool-result clearing to every request in that conversation:

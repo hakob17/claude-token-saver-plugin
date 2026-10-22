@@ -63,6 +63,7 @@ The gateway strips `x-token-saver-key` before forwarding. In the first mode it r
 | **When the limit is reached: Downgrade** | The router stops using the expensive model. The budget policy fails over at the next turn boundary; the smart policy caps hard turns at Sonnet from the next turn, whatever the context size. Work continues more cheaply. |
 | **When the limit is reached: Block** | Requests get a 403 with a readable message ("monthly budget reached ($X of $Y). Ask your manager for a top-up.") and never reach the API. |
 | **Highest model allowed** | *Up to Sonnet* or *Haiku only*. Applies to every request, whatever the budget. |
+| **Smart routing** | On by default. Off means the engineer's requests use the model Claude Code asks for, but limits, the over-limit rule and model caps still apply. Engineers can change it themselves with `/token-saver:smart-router on\|off` (via `POST /token-saver/prefs` with their key); the change shows in the audit trail as made by the engineer. |
 | **Disable access / Rotate key** | Refuse all requests, or issue a new key (the old one stops working at once). |
 
 ## How it fits the proxy
