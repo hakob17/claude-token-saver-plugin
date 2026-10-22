@@ -290,7 +290,6 @@ plugins/token-saver/
     budget-watch.mjs                budget warnings at 50/80/95/100%
     prompt-hint.mjs                 Stop hook: shows the team gateway's prompt hint after a costly turn
     smart-router.mjs                /token-saver:smart-router: routing on/off on the local proxy or team gateway
-    model-switch.mjs                tracks /model changes
     lib.mjs                         shared helpers and thresholds
   proxy/router-proxy.mjs            experimental routing proxy (ANTHROPIC_BASE_URL), see bench/ROUTING-PROXY.md
   proxy/smoke-test.mjs              offline test with a fake upstream
