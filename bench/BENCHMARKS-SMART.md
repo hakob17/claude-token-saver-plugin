@@ -48,6 +48,23 @@ Per-turn routing of the smart router in the 3 rounds:
 | 6. Question: admin password | haiku-5-5, 2 req, $0.00 | haiku-5-5, 1 req, $0.02, 1 cache rebuild | haiku-5-5, 1 req, $0.02, 1 cache rebuild |
 | 7. Question: npm scripts | haiku-5-5, 2 req, $0.00 | haiku-5-5, 2 req, $0.00 | haiku-5-5, 2 req, $0.00 |
 
+### 3 rounds with the local-model classifier (Ollama, November 2026)
+
+Same task and grading, plugin + smart router with `TOKEN_SAVER_CLASSIFIER=ollama` (`qwen2.5:1.5b`, 1.5 s timeout), 3 runs, 2 at a time. Script: [run-mixed-ollama.sh](run-mixed-ollama.sh). Compared with the 3 heuristic rounds above.
+
+| Round | No plugin (Oct) | Smart, heuristic (Oct) | Smart, Ollama classifier | Ollama requests by model |
+|---|---|---|---|---|
+| 1 | $14.71 | $6.65 | $9.99 (80 turns) ✅ | opus-5 73, haiku-5-5 7 |
+| 2 | $13.21 | $6.25 | $7.71 (57 turns) ✅ | opus-5 51, haiku-5-5 6 |
+| 3 | $8.22 | $5.58 | $6.76 (50 turns) ✅ | opus-5 46, haiku-5-5 4 |
+| **Mean** | **$12.04** | **$6.16** (−49%) | **$8.15** (−32%) | |
+| Passed 37/37 | 3/3 | 3/3 | 3/3 | |
+
+- **The local model never used Sonnet.** It called turn 3 ("build the landing page and shop") *hard* ("big vague scope") in all 3 rounds, where the heuristic says standard. So that turn ran on Opus instead of Sonnet, and quality was the same either way (37/37). That one decision explains most of the +$2 per round.
+- **Every other decision matched the heuristic:** both big builds hard, all four questions simple.
+- **7 of 21 decisions timed out** (>1.5 s) and fell back to the heuristic. Two proxies shared one Ollama, and the first call loads the model.
+- **Verdict:** on this session the heuristic is cheaper and just as good. The heuristic stays the default; the Ollama classifier stays opt-in.
+
 ## What it shows
 
 **With the fixed defaults, over 3 rounds: the smart router averaged $6.16 against $12.04 without the plugin (−49%), and all 6 builds passed 37/37.** It was also far more stable ($5.58–6.65 vs $8.22–14.71) and needed fewer turns (58–70 vs 74–104).
