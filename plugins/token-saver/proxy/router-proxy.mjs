@@ -24,6 +24,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DIR, readConfig, periodTotal } from "../scripts/budget-lib.mjs";
 import { decideSmart, contextEdits, CTX_BETA } from "./smart-policy.mjs";
+import { classifyTurnLLM, warmUp, LLM } from "./llm-classifier.mjs";
 
 const env = process.env;
 export const CFG = {
@@ -323,7 +324,7 @@ function handle(req, res) {
   }
   const chunks = [];
   req.on("data", (c) => chunks.push(c));
-  req.on("end", () => {
+  req.on("end", async () => {
     const raw = Buffer.concat(chunks);
     const isMessages = req.method === "POST" && /^\/v1\/messages(\/count_tokens)?(\?|$)/.test(req.url);
     let body = null;
@@ -357,7 +358,11 @@ function handle(req, res) {
       : `routing off (${off}): ${d.reason.replace(/^(default|not-expensive)/, "requested model")}`;
 
     if (!off && CFG.policy === "smart" && EXPENSIVE.test(body.model)) {
-      d = decideSmart({
+      const sub = isSubagent(body), aux = !(Array.isArray(body.tools) && body.tools.length);
+      // Only a turn's first request is classified; the local model is asked only then.
+      const needsCls = !sub && !aux && (isTurnBoundary(body) || !pin);
+      const cls = needsCls && LLM.mode === "ollama" ? await classifyTurnLLM({ messages: body.messages }) : undefined;
+      d = decideSmart({ cls,
         requested: body.model, messages: body.messages, sub: isSubagent(body), aux: !(Array.isArray(body.tools) && body.tools.length),
         boundary: isTurnBoundary(body), fresh: !pin && n <= 1, ctx: estTokens(raw), pin, overBudget: limit > 0 && spend / limit >= CFG.threshold,
       });
@@ -464,6 +469,8 @@ export function start(port = CFG.port, hooks = {}, host = "127.0.0.1") {
     console.error(`[token-saver proxy] http://${host}:${port} -> ${CFG.upstream} (experimental)`);
     console.error(`  budget${CFG.ownBudget ? " (own ledger)" : ""}: ${limit ? `${limit}, switch to ${CFG.fallback} at ${Math.round(CFG.threshold * 100)}%` : "none set — budget failover inactive"}; subagents: ${CFG.subagents}; switch at: ${CFG.switchAt}`);
     console.error(`  log: ${CFG.log}`);
+    if (CFG.policy === "smart") console.error(`  classifier: ${LLM.mode === "ollama" ? `ollama ${LLM.model} at ${LLM.url} (timeout ${LLM.timeoutMs}ms, heuristic fallback)` : "heuristic"}`);
+    warmUp();
   });
   return server;
 }

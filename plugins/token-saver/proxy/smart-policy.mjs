@@ -94,14 +94,15 @@ export const tierOf = (model, requested) =>
 
 // Decide the model for one request. ctx is the estimated context size in tokens.
 // Returns { model, tier, reason, switched, effort, ctxEdit, cls }.
-export function decideSmart({ requested, messages, sub, aux, boundary, fresh, ctx, pin, overBudget }, cfg = SMART) {
+// cls: a classification already made (e.g. by the local-model classifier); otherwise the heuristic runs.
+export function decideSmart({ requested, messages, sub, aux, boundary, fresh, ctx, pin, overBudget, cls: given }, cfg = SMART) {
   const models = { simple: cfg.simple, standard: cfg.standard, hard: requested };
   const ctxEdit = cfg.ctxEditAt > 0 && (pin?.ctxEdit || ctx >= cfg.ctxEditAt);
   if (aux) return { model: cfg.simple, tier: "simple", reason: "side request (no tools)", effort: "low" };
   if (sub) return { model: pin?.model || cfg.standard, tier: "standard", reason: "subagent", ctxEdit };
   if (!boundary && !fresh && pin) return { model: pin.model, tier: pin.tier, reason: "mid-turn: keep the turn's model", effort: pin.effort, ctxEdit };
 
-  const cls = classifyTurn({ messages });
+  const cls = given ? { ...given, signals: [...given.signals] } : classifyTurn({ messages });
   let tier = cls.tier;
   if (overBudget && tier === "hard") { tier = "standard"; cls.signals.push("over budget: hard capped to standard"); }
   const target = models[tier];

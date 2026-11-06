@@ -49,6 +49,32 @@ Other rules:
 
 Every decision is logged with its tier, score and signals (`~/.claude/token-saver/proxy-log.jsonl`), so a misroute can be traced and the weights tuned.
 
+## Optional: a small local model as the classifier
+
+Instead of the points, a small model running locally in [Ollama](https://ollama.com) can decide each turn's tier. It reads the request the way a person would: "make it production-ready" is a big job even though it's short.
+
+```bash
+ollama pull qwen2.5:1.5b            # about 1 GB, once
+TOKEN_SAVER_CLASSIFIER=ollama node plugins/token-saver/proxy/router-proxy.mjs
+./start-gateway.sh --llm            # same for the team gateway
+```
+
+How it works:
+
+- **Asked once per turn.** Only the first request after your message is classified. The model gets your words only, and at most the first 2,000 characters. Mid-turn requests aren't classified again, and repeats come from a cache.
+- **Local only.** The prompt goes to Ollama on this machine, never to another service.
+- **Never blocks a turn for long.** If Ollama doesn't answer within `TOKEN_SAVER_CLASSIFIER_TIMEOUT_MS` (default 1,500 ms), is down, or returns something unusable, the points heuristic decides. The model is loaded at start-up, so the first turn isn't slow.
+- **Safety rules unchanged.** Escalation after repeated failures still applies on top of the model's answer, as do all the switching rules (pinned per turn, cheap moves down only, over-budget cap). Both answers are logged, for example `ollama qwen2.5:1.5b: hard (big vague scope, 140ms)` and `heuristic would say simple (score -1)`, so the two can be compared.
+
+| Variable | Default |
+|---|---|
+| `TOKEN_SAVER_CLASSIFIER` | `heuristic` (`ollama` to turn it on) |
+| `TOKEN_SAVER_OLLAMA_MODEL` | `qwen2.5:1.5b` |
+| `TOKEN_SAVER_OLLAMA_URL` | `http://127.0.0.1:11434` |
+| `TOKEN_SAVER_CLASSIFIER_TIMEOUT_MS` | `1500` |
+
+Check the model on typical requests with `node plugins/token-saver/proxy/llm-test.mjs --live`.
+
 ## Turning routing off
 
 Run `/token-saver:smart-router off` to stop routing without leaving the proxy. Requests still go through the proxy and are still logged, but each one uses the model Claude Code asked for: no tiers, no Haiku for side requests, no effort changes. Budget rules still apply, so over budget the budget failover still moves you to Sonnet. Run `/token-saver:smart-router on` to turn it back on, or `status` to check. Either change takes effect at your next message, with no restart.

@@ -294,6 +294,7 @@ plugins/token-saver/
   proxy/router-proxy.mjs            experimental routing proxy (ANTHROPIC_BASE_URL), see bench/ROUTING-PROXY.md
   proxy/smoke-test.mjs              offline test with a fake upstream
   proxy/smart-policy.mjs            smart routing policy (per-turn complexity classifier), see bench/SMART-ROUTER.md
+  proxy/llm-classifier.mjs          optional classifier on a small local Ollama model (heuristic fallback)
   team/gateway.mjs                  experimental team gateway + admin API, see bench/TEAM-GATEWAY.md
   team/dashboard.html               manager dashboard (served at /admin)
   team/prompt-hints.mjs             prompt-shape signals and hint rules
